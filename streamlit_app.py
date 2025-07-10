@@ -1,10 +1,27 @@
+import os
 import streamlit as st
 from PyPDF2 import PdfReader
 import openai
 
-# Set your OpenAI API key from Streamlit Secrets
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# --- START: API key test snippet ---
+openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+st.write(f"API key loaded? {'Yes' if openai_api_key else 'No'}")
 
+openai.api_key = openai_api_key
+
+try:
+    response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Say hello"}]
+    )
+    st.write("OpenAI response received:")
+    st.write(response.choices[0].message.content)
+except Exception as e:
+    st.write("Error while calling OpenAI:")
+    st.write(e)
+# --- END: API key test snippet ---
+
+# Main app title and PDF upload logic below
 st.title("PDF Summarizer with OpenAI GPT")
 
 uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
