@@ -65,34 +65,53 @@ with tab1:
 # --- Use Case 2: Similar Case Retrieval ---
 def get_case_details(case_url):
     headers = {"User-Agent": "Mozilla/5.0"}
-    time.sleep(1)  # polite delay to avoid hammering server
+    time.sleep(1)  # polite delay
 
     try:
         resp = requests.get(case_url, headers=headers)
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Initialize fields
+        # Initialize defaults
         outcome = "Not found"
         duration = "Not found"
         appeals = "Not found"
 
-        # Example heuristics:
-        # Look for paragraphs or divs that contain keywords like 'Outcome', 'Duration', 'Appeal'
-        paragraphs = soup.find_all(["p", "div", "span"])
+        # Look for headings related to outcome, appeals, duration
+        for heading_text, attr_name in [
+            ("outcome", "outcome"),
+            ("decision", "outcome"),
+            ("appeal", "appeals"),
+            ("further proceedings", "appeals"),
+            ("duration", "duration"),
+            ("time frame", "duration"),
+        ]:
+            headings = soup.find_all(lambda tag: tag.name in ["h2", "h3"] and heading_text in tag.get_text(strip=True).lower())
+            for h in headings:
+                # Try to get next sibling paragraph or div text
+                next_node = h.find_next_sibling(["p", "div"])
+                if next_node:
+                    text = next_node.get_text(strip=True)
+                    if attr_name == "outcome" and outcome == "Not found":
+                        outcome = text
+                    elif attr_name == "appeals" and appeals == "Not found":
+                        appeals = text
+                    elif attr_name == "duration" and duration == "Not found":
+                        duration = text
 
-        for p in paragraphs:
-            text = p.get_text(separator=" ", strip=True).lower()
-            if "outcome" in text and outcome == "Not found":
-                outcome = p.get_text(separator=" ", strip=True)
-            if "duration" in text and duration == "Not found":
-                duration = p.get_text(separator=" ", strip=True)
-            if "appeal" in text and appeals == "Not found":
-                appeals = p.get_text(separator=" ", strip=True)
+        # Fallback: try searching whole text for keywords (less reliable)
+        page_text = soup.get_text(separator="\n").lower()
+        if outcome == "Not found" and "outcome" in page_text:
+            outcome = "Outcome mentioned in text."
+        if appeals == "Not found" and "appeal" in page_text:
+            appeals = "Appeal info mentioned in text."
+        if duration == "Not found" and "duration" in page_text:
+            duration = "Duration mentioned in text."
 
         return outcome, duration, appeals
 
     except Exception as e:
         return f"Error retrieving details: {e}", "", ""
+
 
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
