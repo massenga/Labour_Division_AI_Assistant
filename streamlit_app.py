@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import streamlit as st
 from PyPDF2 import PdfReader
 import openai
@@ -62,6 +63,37 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
+def get_case_details(case_url):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    time.sleep(1)  # polite delay to avoid hammering server
+
+    try:
+        resp = requests.get(case_url, headers=headers)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Initialize fields
+        outcome = "Not found"
+        duration = "Not found"
+        appeals = "Not found"
+
+        # Example heuristics:
+        # Look for paragraphs or divs that contain keywords like 'Outcome', 'Duration', 'Appeal'
+        paragraphs = soup.find_all(["p", "div", "span"])
+
+        for p in paragraphs:
+            text = p.get_text(separator=" ", strip=True).lower()
+            if "outcome" in text and outcome == "Not found":
+                outcome = p.get_text(separator=" ", strip=True)
+            if "duration" in text and duration == "Not found":
+                duration = p.get_text(separator=" ", strip=True)
+            if "appeal" in text and appeals == "Not found":
+                appeals = p.get_text(separator=" ", strip=True)
+
+        return outcome, duration, appeals
+
+    except Exception as e:
+        return f"Error retrieving details: {e}", "", ""
+
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
@@ -98,7 +130,14 @@ with tab2:
                 if results:
                     st.subheader("Recent Similar Cases")
                     for title, link in results:
-                        st.markdown(f"- [{title}]({link})")
+                        st.markdown(f"### [{title}]({link})")
+                        outcome, duration, appeals = get_case_details(link)
+
+                        st.markdown(f"**Outcome:** {outcome}")
+                        st.markdown(f"**Duration:** {duration}")
+                        st.markdown(f"**Appeals:** {appeals}")
+                        st.markdown("---")
+
                 else:
                     st.warning("No similar cases found with those keywords.")
 
