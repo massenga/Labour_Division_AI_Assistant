@@ -21,7 +21,7 @@ except Exception as e:
     st.write(e)
 # --- END: API key test snippet ---
 
-# Main app title and PDF upload logic
+# Main app title and PDF upload logic below
 st.title("PDF Summarizer with OpenAI GPT")
 
 uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
@@ -49,3 +49,10 @@ if uploaded_file is not None:
                     max_tokens=300,
                     temperature=0.5,
                 )
+                summary = response.choices[0].message.content
+                st.subheader("Summary")
+                st.write(summary)
+            except Exception as e:
+                st.error(f"Error while summarizing: {e}")
+else:
+    st.write("Please upload a PDF file to extract and summarize text.")
