@@ -3,25 +3,13 @@ import streamlit as st
 from PyPDF2 import PdfReader
 import openai
 
-# --- START: API key test snippet ---
+# Load OpenAI API key from environment or Streamlit secrets
 openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 st.write(f"API key loaded? {'Yes' if openai_api_key else 'No'}")
 
 openai.api_key = openai_api_key
 
-try:
-    response = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": "Say hello"}]
-    )
-    st.write("OpenAI response received:")
-    st.write(response.choices[0].message.content)
-except Exception as e:
-    st.write("Error while calling OpenAI:")
-    st.write(e)
-# --- END: API key test snippet ---
-
-# Main app title and PDF upload logic below
+# Main app title and PDF upload logic
 st.title("PDF Summarizer with OpenAI GPT")
 
 uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
@@ -43,11 +31,20 @@ if uploaded_file is not None:
                 response = openai.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": "You are a helpful assistant that summarizes text."},
-                        {"role": "user", "content": f"Please summarize the following text:\n\n{text}"}
+                        {"role": "system", "content": "You are a legal assistant AI that summarizes labor court judgments."},
+                        {"role": "user", "content": f"""Summarize the following judgment into 5 bullet points focusing on:
+1. Cause of dispute
+2. Legal reasoning
+3. Final ruling
+4. Laws or precedents cited
+5. Potential impact or implications
+
+Text to summarize:
+{text}
+"""}
                     ],
-                    max_tokens=300,
-                    temperature=0.5,
+                    max_tokens=600,
+                    temperature=0.4,
                 )
                 summary = response.choices[0].message.content
                 st.subheader("Summary")
