@@ -1,78 +1,96 @@
-import os, re, requests, streamlit as st
-from bs4 import BeautifulSoup
+import os
+import streamlit as st
 from PyPDF2 import PdfReader
 import openai
+import requests
+from bs4 import BeautifulSoup
 
-# Load API key
-openai.api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+# Load OpenAI API key
+openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+openai.api_key = openai_api_key
 
+# App Title
 st.title("Labour Division AI Assistant")
-tab1, tab2 = st.tabs(["📄 Summarization", "🔍 Similar Cases"])
 
-# Tab 1: Summarization (unchanged) …
+# Tabs
+tab1, tab2 = st.tabs(["📄 Judgment Summarization", "🔍 Similar Case Retrieval"])
+
+# --- Use Case 1: Summarization ---
 with tab1:
-    st.header("Upload Judgment PDF")
-    pdf = st.file_uploader("", type="pdf")
-    if pdf:
+    st.header("Upload a Judgment PDF to Summarize")
+    uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
+
+    if uploaded_file is not None:
+        reader = PdfReader(uploaded_file)
         text = ""
-        for p in PdfReader(pdf).pages:
-            t = p.extract_text() or ""
-            text += t + "\n"
-        st.text_area("Extracted Text", text, height=200)
-        if st.button("Summarize"):
+        for page in reader.pages:
+            content = page.extract_text()
+            if content:
+                text += content + "\n"
+
+        st.subheader("Extracted Text")
+        st.write(text)
+
+        if st.button("Summarize Judgment"):
             with st.spinner("Summarizing..."):
                 try:
                     prompt = (
-                        "Summarize into 5 key points: 1) cause, 2) reasoning, "
-                        "3) ruling, 4) cited laws, 5) impact.\n\n" + text
+                        "Summarize the following labour court judgment into 5 key points. "
+                        "The summary must include: 1) cause of dispute, 2) legal reasoning, "
+                        "3) final ruling, 4) cited laws, and 5) potential impact or precedent.\n\n"
+                        f"{text}"
                     )
-                    resp = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
-                        messages=[{"role":"user","content":prompt}],
-                        max_tokens=500, temperature=0.4
+
+                    response = openai.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You are a legal assistant."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=500,
+                        temperature=0.4
                     )
-                    st.write(resp.choices[0].message.content)
+                    summary = response.choices[0].message.content
+                    st.subheader("Summary")
+                    st.write(summary)
+                except openai.error.RateLimitError:
+                    st.error("OpenAI quota exceeded. Please check your billing.")
                 except Exception as e:
-                    st.error(e)
+                    st.error(f"Error: {e}")
+    else:
+        st.info("Please upload a PDF to summarize.")
 
-# Tab 2: Similar Cases with better filtering …
+# --- Use Case 2: Similar Case Retrieval ---
 with tab2:
-    st.header("Find Similar Labour Judgments")
-    query = st.text_input("Enter keywords (e.g., 'unfair termination pregnancy')")
-    if st.button("Search"):
+    st.header("Search for Similar Cases on TanzLII")
+    query = st.text_input("Enter case description (e.g., 'termination', 'pregnancy')")
+
+    if st.button("Find Similar Judgments"):
         with st.spinner("Searching TanzLII..."):
-            matched = []
-            url_base = "https://tanzlii.org"
-            url = url_base + "/judgments/TZHCLD"
-            headers = {"User-Agent": "Mozilla/5.0"}
-            qtext = query.lower().strip()
+            try:
+                search_url = f"https://tanzlii.org/judgments/TZHCLD?search_api_fulltext={query.replace(' ', '+')}"
+                headers = {"User-Agent": "Mozilla/5.0"}
+                response = requests.get(search_url, headers=headers)
+                if response.status_code != 200:
+                    st.error(f"Failed to fetch results. Status code: {response.status_code}")
+                else:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    results = soup.select("div.view-content .views-row")
 
-            for pg in range(15):  # includes ~15 pages
-                r = requests.get(url, params={"page": pg}, headers=headers, timeout=10)
-                if r.status_code != 200:
-                    break
-                soup = BeautifulSoup(r.text, "html.parser")
-                rows = soup.select("div.view-content .views-row")
-                if not rows:
-                    break
+                    if not results:
+                        st.warning("No similar cases found.")
+                    else:
+                        st.subheader("Recent Similar Cases")
+                        count = 0
+                        for case in results:
+                            if count >= 6:
+                                break
+                            title_tag = case.select_one(".title a")
+                            if title_tag:
+                                title = title_tag.text.strip()
+                                link = "https://tanzlii.org" + title_tag["href"]
+                                st.markdown(f"- [{title}]({link})")
+                                count += 1
 
-                for row in rows:
-                    a = row.select_one(".title a")
-                    if not a:
-                        continue
-                    title = a.text.strip()
-                    link = url_base + a["href"]
-                    block = (title + " " + (row.select_one(".field-content").text if row.select_one(".field-content") else "")).lower()
-                    if qtext in block:
-                        matched.append((title, link))
-                    if len(matched) >= 6:
-                        break
-                if len(matched) >= 6:
-                    break
-
-            if not matched:
-                st.warning("✅ No matching cases found in recent judgments.")
-            else:
-                st.subheader("Matched Judgments")
-                for title, link in matched:
-                    st.markdown(f"- [{title}]({link})")
+            except Exception as e:
+                st.error(f"Error retrieving cases: {e}")
