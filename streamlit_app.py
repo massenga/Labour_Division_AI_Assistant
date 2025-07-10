@@ -1,4 +1,5 @@
 import os
+import re
 import streamlit as st
 from PyPDF2 import PdfReader
 import openai
@@ -68,22 +69,38 @@ with tab2:
     if st.button("Find Similar Judgments"):
         with st.spinner("Searching TanzLII..."):
             try:
-                search_url = f"https://tanzlii.org/judgments/TZHCLD?search_api_fulltext={query.replace(' ', '+')}"
+                search_url = "https://tanzlii.org/judgments/TZHCLD"
                 headers = {"User-Agent": "Mozilla/5.0"}
                 response = requests.get(search_url, headers=headers)
                 soup = BeautifulSoup(response.text, "html.parser")
 
-                results = soup.select("div.view-content .views-row")
-                if not results:
-                    st.warning("No similar cases found.")
-                else:
+                # Tokenize the query into words of length >= 3
+                query_tokens = set(re.findall(r'\b\w{3,}\b', query.lower()))
+                st.caption(f"Searching for keywords: {', '.join(query_tokens)}")
+
+                results = []
+                for case in soup.select("div.view-content .views-row"):
+                    title_tag = case.select_one(".title a")
+                    if not title_tag:
+                        continue
+                    title_text = title_tag.text.strip()
+                    # Tokenize the case title
+                    title_tokens = set(re.findall(r'\b\w{3,}\b', title_text.lower()))
+
+                    # Check if any token from the query is in the title tokens
+                    if query_tokens & title_tokens:
+                        link = "https://tanzlii.org" + title_tag["href"]
+                        results.append((title_text, link))
+
+                    if len(results) >= 6:
+                        break
+
+                if results:
                     st.subheader("Recent Similar Cases")
-                    for case in results[:6]:
-                        title_tag = case.select_one(".title a")
-                        if title_tag:
-                            title = title_tag.text.strip()
-                            link = "https://tanzlii.org" + title_tag["href"]
-                            st.markdown(f"- [{title}]({link})")
+                    for title, link in results:
+                        st.markdown(f"- [{title}]({link})")
+                else:
+                    st.warning("No similar cases found with those keywords.")
 
             except Exception as e:
                 st.error(f"Error retrieving cases: {e}")
