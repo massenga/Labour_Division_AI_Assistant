@@ -40,19 +40,21 @@ if uploaded_file is not None:
     if st.button("Summarize Text"):
         with st.spinner("Summarizing..."):
             try:
-                response = openai.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful assistant that summarizes text."},
-                        {"role": "user", "content": f"Please summarize the following text:\n\n{text}"}
-                    ],
-                    max_tokens=300,
-                    temperature=0.5,
-                )
-                summary = response.choices[0].message.content
-                st.subheader("Summary")
-                st.write(summary)
-            except Exception as e:
-                st.error(f"Error while summarizing: {e}")
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that summarizes text."},
+                    {"role": "user", "content": f"Please summarize the following text:\n\n{text}"}
+                ],
+                max_tokens=300,
+                temperature=0.5,
+            )
+            summary = response.choices[0].message.content
+            st.subheader("Summary")
+            st.write(summary)
+        except openai.error.RateLimitError:
+            st.error("OpenAI quota exceeded. Please check your account and billing.")
+        except Exception as e:
+            st.error(f"Error while summarizing: {e}")
 else:
     st.write("Please upload a PDF file to extract and summarize text.")
