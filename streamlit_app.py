@@ -9,23 +9,23 @@ openai.api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 st.title("Labour Division AI Assistant")
 tab1, tab2 = st.tabs(["📄 Summarization", "🔍 Similar Cases"])
 
-# --- Tab 1: PDF Summarization ---
+# Tab 1: Summarization (unchanged) …
 with tab1:
     st.header("Upload Judgment PDF")
-    uploaded = st.file_uploader("", type="pdf")
-    if uploaded:
+    pdf = st.file_uploader("", type="pdf")
+    if pdf:
         text = ""
-        for p in PdfReader(uploaded).pages:
-            t = p.extract_text()
-            if t: text += t + "\n"
-        st.write(text)
+        for p in PdfReader(pdf).pages:
+            t = p.extract_text() or ""
+            text += t + "\n"
+        st.text_area("Extracted Text", text, height=200)
         if st.button("Summarize"):
-            with st.spinner("Working..."):
-                prompt = (
-                    "Summarize into 5 key points: 1) cause, 2) legal reasoning, "
-                    "3) ruling, 4) cited laws, 5) impact.\n\n" + text
-                )
+            with st.spinner("Summarizing..."):
                 try:
+                    prompt = (
+                        "Summarize into 5 key points: 1) cause, 2) reasoning, "
+                        "3) ruling, 4) cited laws, 5) impact.\n\n" + text
+                    )
                     resp = openai.ChatCompletion.create(
                         model="gpt-3.5-turbo",
                         messages=[{"role":"user","content":prompt}],
@@ -35,45 +35,44 @@ with tab1:
                 except Exception as e:
                     st.error(e)
 
-# --- Tab 2: Similar Case Retrieval ---
+# Tab 2: Similar Cases with better filtering …
 with tab2:
     st.header("Find Similar Labour Judgments")
-    query = st.text_input("Keywords (e.g., 'unfair termination pregnancy')")
-
+    query = st.text_input("Enter keywords (e.g., 'unfair termination pregnancy')")
     if st.button("Search"):
         with st.spinner("Searching TanzLII..."):
-            matches = []
-            base = "https://tanzlii.org"
-            url = base + "/judgments/TZHCLD"
+            matched = []
+            url_base = "https://tanzlii.org"
+            url = url_base + "/judgments/TZHCLD"
             headers = {"User-Agent": "Mozilla/5.0"}
+            qtext = query.lower().strip()
 
-            # Scrape first 5 pages (~50 cases)
-            for pg in range(5):
-                resp = requests.get(url, params={"page": pg}, headers=headers, timeout=10)
-                if resp.status_code != 200: break
-                soup = BeautifulSoup(resp.text, "html.parser")
+            for pg in range(15):  # includes ~15 pages
+                r = requests.get(url, params={"page": pg}, headers=headers, timeout=10)
+                if r.status_code != 200:
+                    break
+                soup = BeautifulSoup(r.text, "html.parser")
                 rows = soup.select("div.view-content .views-row")
-                if not rows: break
-
-                for row in rows:
-                    ttag = row.select_one(".title a")
-                    summary = row.select_one(".field-content")
-                    if not ttag: continue
-                    title = ttag.text.strip()
-                    summ = summary.text.strip() if summary else ""
-                    tokens = set(re.findall(r"\w+", (title + " " + summ).lower()))
-
-                    # Check intersection with query tokens
-                    q_tokens = set(re.findall(r"\w+", query.lower()))
-                    if q_tokens & tokens:
-                        link = base + ttag["href"]
-                        matches.append((title, link))
-                if len(matches) >= 6:
+                if not rows:
                     break
 
-            if not matches:
-                st.warning("No similar cases found in recent judgments.")
+                for row in rows:
+                    a = row.select_one(".title a")
+                    if not a:
+                        continue
+                    title = a.text.strip()
+                    link = url_base + a["href"]
+                    block = (title + " " + (row.select_one(".field-content").text if row.select_one(".field-content") else "")).lower()
+                    if qtext in block:
+                        matched.append((title, link))
+                    if len(matched) >= 6:
+                        break
+                if len(matched) >= 6:
+                    break
+
+            if not matched:
+                st.warning("✅ No matching cases found in recent judgments.")
             else:
                 st.subheader("Matched Judgments")
-                for title, link in matches[:6]:
+                for title, link in matched:
                     st.markdown(f"- [{title}]({link})")
