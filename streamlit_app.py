@@ -79,13 +79,13 @@ def fetch_and_summarize_pdfs_direct(search_query, max_pdfs=6):
 
     # Step 1: Find 'Download' links (usually PDF sources)
     download_links = []
-    for a in soup.find_all("a", href=True, string="Download"):
-        href = a["href"]
-        if "/source" in href:  # TanzLII PDF links contain "/source"
+    for a in soup.find_all("a", href=True):
+        if a.text.strip().lower() == "download":
+            href = a["href"]
             full_url = urljoin(base_url, href)
             download_links.append(full_url)
-        if len(download_links) >= max_pdfs:
-            break
+            if len(download_links) >= max_pdfs:
+                break
 
     if not download_links:
         return [{"summary": "⚠️ No PDF download links found. Try a broader keyword."}]
