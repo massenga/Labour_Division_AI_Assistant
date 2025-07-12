@@ -80,84 +80,91 @@ with tab1:
             #unsafe_allow_html=True
         #)
 
-with tab2:
-    st.header("Search for Similar Cases on TanzLII")
+def fetch_search_results(query, max_cases=6):
+    # Prepare URL (replace spaces with +)
+    search_url = f"https://tanzlii.org/search/?suggestion=&q={query.replace(' ', '+')}#gsc.tab=0"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    resp = requests.get(search_url, headers=headers)
+    soup = BeautifulSoup(resp.text, 'html.parser')
 
+    # Find judgment links and titles from search results
+    # TanzLII search results contain <a> tags with class 'gs-title' for links
+    cases = []
+    for a in soup.select('a.gs-title')[:max_cases]:
+        href = a.get('href')
+        title = a.get_text(strip=True)
+        if href and title and href.startswith('/'):
+            full_link = 'https://tanzlii.org' + href
+            cases.append({"title": title, "link": full_link})
+
+    return cases
+
+def fetch_case_details(case_url):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    resp = requests.get(case_url, headers=headers)
+    soup = BeautifulSoup(resp.text, 'html.parser')
+
+    # Attempt to extract date - usually in <div class="judgment-details"> or similar
+    date = "Date not found"
+    date_div = soup.find('div', class_='judgment-details')
+    if date_div:
+        # Often contains date text, let's extract something that looks like a date
+        import re
+        date_match = re.search(r'\d{1,2} \w+ \d{4}', date_div.text)
+        if date_match:
+            date = date_match.group()
+
+    # For summary/outcome, try to get first paragraph of the judgment text
+    summary = "Summary not found"
+    # Judgments are often inside <div class="judgment-body"> or <div id="body">
+    body_div = soup.find('div', class_='judgment-body') or soup.find('div', id='body')
+    if body_div:
+        paragraphs = body_div.find_all('p')
+        if paragraphs:
+            summary = paragraphs[0].get_text(strip=True)[:500]  # first 500 chars as snippet
+
+    # Duration and Appeal are complex and may require deeper NLP or manual extraction
+    duration = "N/A"
+    appeal = "N/A"
+
+    return {
+        "date": date,
+        "summary": summary,
+        "duration": duration,
+        "appeal": appeal
+    }
+
+with st.sidebar:
+    st.title("TanzLII Judgment Search")
+
+tab1, tab2 = st.tabs(["Search", "Results"])
+
+with tab1:
+    st.header("Search TanzLII for Judgments")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
+with tab2:
     if not query:
         st.info("Please enter a description to search.")
     else:
-        search_url = f"https://tanzlii.org/search/?suggestion=&q={query.replace(' ', '+')}#gsc.tab=0"
-        st.markdown(f"<p style='font-size: 0.85rem;'><a href='{search_url}' target='_blank'>🔎 View full search results on TanzLII</a></p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size: 0.85rem;'><a href='https://tanzlii.org/search/?suggestion=&q={query.replace(' ', '+')}#gsc.tab=0' target='_blank'>🔎 View full search results on TanzLII</a></p>", unsafe_allow_html=True)
 
-        # You can later replace this with real-time scraped results from TanzLII
-        if "unfair termination" in query.lower():
-            st.subheader("Top Matching Cases:")
+        with st.spinner("Fetching cases..."):
+            cases = fetch_search_results(query)
 
-            base_url = "https://tanzlii.org"
-            cases = [
-                {
-                    "title": "Standard Chartered Bank vs Anitha Rukoijo (2022)",
-                    "path": "/tzhcld/judgment/standard-chartered-bank-vs-anitha-rukoijo-2022",
-                    "date": "8 March 2022",
-                    "summary": "Termination was found to be unfair due to lack of fair hearing.",
-                    "duration": "N/A",
-                    "appeal": "No appeal noted."
-                },
-                {
-                    "title": "Viettel Tanzania Ltd vs Esther Ndudumizi (2020)",
-                    "path": "/tzhcld/judgment/viettel-tanzania-ltd-vs-esther-ndudumizi-2020",
-                    "date": "10 July 2020",
-                    "summary": "Employer ordered to pay 24 months' salary for unlawful dismissal.",
-                    "duration": "Over 3 years",
-                    "appeal": "Appeal of CMA decision."
-                },
-                {
-                    "title": "National Microfinance Bank vs Mwajuma Seif (2021)",
-                    "path": "/tzhcld/judgment/nmb-vs-mwajuma-seif-2021",
-                    "date": "12 October 2021",
-                    "summary": "Termination ruled as unfair for failure to follow procedure.",
-                    "duration": "5 years",
-                    "appeal": "Appealed from Labour Court."
-                },
-                {
-                    "title": "Vodacom Tanzania vs Justina Mwakyusa (2022)",
-                    "path": "/tzhcld/judgment/vodacom-vs-justina-mwakyusa-2022",
-                    "date": "18 April 2022",
-                    "summary": "Dismissal invalidated; reinstatement ordered.",
-                    "duration": "7 years",
-                    "appeal": "Case escalated to High Court."
-                },
-                {
-                    "title": "CRDB Bank vs Fredrick Kabombo (2019)",
-                    "path": "/tzhcld/judgment/crdb-vs-kabombo-2019",
-                    "date": "2 May 2019",
-                    "summary": "Dismissal deemed disproportionate for misconduct.",
-                    "duration": "N/A",
-                    "appeal": "Initial decision upheld."
-                },
-                {
-                    "title": "NBC Ltd vs Miriam Mushi (2021)",
-                    "path": "/tzhcld/judgment/nbc-vs-miriam-mushi-2021",
-                    "date": "11 November 2021",
-                    "summary": "Court found employer's reasons not valid.",
-                    "duration": "3 years",
-                    "appeal": "No further appeal recorded."
-                }
-            ]
-
-            for case in cases:
-                case_link = base_url + case["path"]
-                st.markdown(f"""
-                <div style='font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.5em;'>
-                    <strong><a href="{case_link}" target="_blank">{case['title']}</a></strong><br>
-                    📅 <strong>Date:</strong> {case['date']}<br>
-                    📄 <strong>Outcome:</strong> {case['summary']}<br>
-                    ⏳ <strong>Duration:</strong> {case['duration']}<br>
-                    🔁 <strong>Appeal:</strong> {case['appeal']}
-                </div>
-                """, unsafe_allow_html=True)
+        if not cases:
+            st.warning("No cases found.")
         else:
-            st.warning("No matching summaries available. Try a broader keyword.")
+            st.subheader(f"Top {len(cases)} Judgments:")
+
+            for idx, case in enumerate(cases):
+                with st.expander(f"{idx+1}. {case['title']}"):
+                    details = fetch_case_details(case["link"])
+                    st.markdown(f"""
+                    📅 **Date:** {details['date']}  
+                    📄 **Summary (snippet):** {details['summary']}  
+                    ⏳ **Duration:** {details['duration']}  
+                    🔁 **Appeal:** {details['appeal']}  
+                    🔗 [View Full Judgment]({case['link']})
+                    """, unsafe_allow_html=True)
 
