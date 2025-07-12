@@ -84,6 +84,10 @@ def fetch_and_summarize_pdfs(search_query, max_cases=6):
             if len(case_links) >= max_cases:
                 break
 
+    print("Case links found:")
+    for c in case_links:
+        print(c["title"], c["case_url"])
+    
     results = []
 
     # Step 2: For each case, get the PDF link and summarize
