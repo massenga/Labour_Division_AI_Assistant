@@ -64,6 +64,78 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
+def fetch_and_summarize_pdfs(search_query, max_cases=6):
+
+    search_url = f"https://tanzlii.org/search/?q={search_query.replace(' ', '+')}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(search_url, headers=headers)
+    if response.status_code != 200:
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # Find PDF links (adjust selector if needed)
+    pdf_cases = []
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        if href.lower().endswith(".pdf"):
+            full_url = urljoin(search_url, href)
+            title = link.get_text(strip=True) or "No Title"
+            pdf_cases.append({"title": title, "pdf_url": full_url})
+            if len(pdf_cases) >= max_cases:
+                break
+
+    results = []
+
+    for case in pdf_cases:
+        try:
+            pdf_response = requests.get(case["pdf_url"])
+            pdf_response.raise_for_status()
+            pdf_bytes = pdf_response.content
+
+            reader = PdfReader(BytesIO(pdf_bytes))
+            text = ""
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+
+            if not text.strip():
+                summary = "⚠️ No extractable text found in PDF."
+            else:
+                prompt = (
+                    "Summarize the following labour court judgment into 5 key points: "
+                    "1) cause of dispute, 2) legal reasoning, 3) final ruling, "
+                    "4) cited laws, and 5) potential impact or precedent.\n\n"
+                    f"{text[:3000]}"
+                )
+
+                response = openai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a legal assistant."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=500,
+                    temperature=0.4,
+                )
+                summary = response.choices[0].message.content
+
+            results.append({
+                "title": case["title"],
+                "pdf_url": case["pdf_url"],
+                "summary": summary,
+            })
+
+        except Exception as e:
+            results.append({
+                "title": case["title"],
+                "pdf_url": case["pdf_url"],
+                "summary": f"Error processing PDF: {e}",
+            })
+
+    return results
+
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
@@ -74,3 +146,14 @@ with tab2:
             f"<small>[Click here to search TanzLII for Similar cases to '{query}']({search_url})</small>",
             unsafe_allow_html=True
         )
+
+        with st.spinner("Fetching and summarizing PDF judgments... this may take a while"):
+            cases = fetch_and_summarize_pdfs(query, max_cases=6)
+
+        if cases:
+            for idx, case in enumerate(cases, start=1):
+                st.subheader(f"Case {idx}: {case['title']}")
+                st.markdown(f"[Download PDF]({case['pdf_url']})", unsafe_allow_html=True)
+                st.write(case["summary"])
+        else:
+            st.warning("No PDF judgments found for the given query. Try a broader keyword.")
