@@ -60,17 +60,10 @@ with tab1:
     else:
         st.info("Please upload a PDF to summarize.")
 
-# --- Use Case 2: Similar Case Retrieval ---
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
-    if st.button("Find Similar Judgments"):
-        if query.strip() == "":
-            st.warning("Please enter a search query.")
-        else:
-            # Generate TanzLII search URL
-            encoded_query = query.strip().replace(" ", "+")
-            search_url = f"https://tanzlii.org/judgments/TZHCLD?search_api_fulltext={encoded_query}"
-            st.success("Click below to view similar judgments on TanzLII:")
-            st.markdown(f"[🔍 View Results for '{query}']({search_url})", unsafe_allow_html=True)
+    if query:
+        search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
+        st.markdown(f"### [Click here to search TanzLII for '{query}']({search_url})")
