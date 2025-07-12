@@ -65,7 +65,6 @@ with tab1:
 
 # --- Use Case 2: Similar Case Retrieval ---
 def fetch_and_summarize_pdfs(search_query, max_cases=6):
-
     search_url = f"https://tanzlii.org/search/?q={search_query.replace(' ', '+')}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(search_url, headers=headers)
@@ -74,22 +73,39 @@ def fetch_and_summarize_pdfs(search_query, max_cases=6):
 
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # Find PDF links (adjust selector if needed)
-    pdf_cases = []
-    for link in soup.find_all("a", href=True):
-        href = link["href"]
-        if href.lower().endswith(".pdf"):
-            full_url = urljoin(search_url, href)
-            title = link.get_text(strip=True) or "No Title"
-            pdf_cases.append({"title": title, "pdf_url": full_url})
-            if len(pdf_cases) >= max_cases:
+    # Step 1: Get case links and titles
+    case_links = []
+    for a_tag in soup.find_all("a", class_="h5 text-primary"):
+        href = a_tag.get("href")
+        title = a_tag.get_text(strip=True)
+        if href and title:
+            full_case_url = urljoin(search_url, href)
+            case_links.append({"title": title, "case_url": full_case_url})
+            if len(case_links) >= max_cases:
                 break
 
     results = []
 
-    for case in pdf_cases:
+    # Step 2: For each case, get the PDF link and summarize
+    for case in case_links:
         try:
-            pdf_response = requests.get(case["pdf_url"])
+            case_resp = requests.get(case["case_url"], headers=headers)
+            case_resp.raise_for_status()
+            case_soup = BeautifulSoup(case_resp.text, "html.parser")
+
+            # Find PDF download link ending with '/source'
+            pdf_link_tag = case_soup.find("a", href=lambda x: x and x.endswith("/source"))
+            if not pdf_link_tag:
+                results.append({
+                    "title": case["title"],
+                    "pdf_url": None,
+                    "summary": "⚠️ PDF link not found on case page."
+                })
+                continue
+
+            pdf_url = urljoin(case["case_url"], pdf_link_tag["href"])
+
+            pdf_response = requests.get(pdf_url, headers=headers)
             pdf_response.raise_for_status()
             pdf_bytes = pdf_response.content
 
@@ -123,18 +139,19 @@ def fetch_and_summarize_pdfs(search_query, max_cases=6):
 
             results.append({
                 "title": case["title"],
-                "pdf_url": case["pdf_url"],
+                "pdf_url": pdf_url,
                 "summary": summary,
             })
 
         except Exception as e:
             results.append({
                 "title": case["title"],
-                "pdf_url": case["pdf_url"],
-                "summary": f"Error processing PDF: {e}",
+                "pdf_url": None,
+                "summary": f"Error processing case: {e}",
             })
 
     return results
+
 
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
