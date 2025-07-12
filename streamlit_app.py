@@ -73,42 +73,48 @@ with tab1:
             #unsafe_allow_html=True
         #)
 
-
 def scrape_tanzlii_cases(query, max_cases=6):
-    import requests
-    from bs4 import BeautifulSoup
-
     search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; TanzLII-Bot/1.0)"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     response = requests.get(search_url, headers=headers)
     if response.status_code != 200:
         return []
 
     soup = BeautifulSoup(response.text, 'html.parser')
-    container = soup.find('div', class_='list-unstyled search-result-list')
-    if not container:
-        return []
 
-    results = container.find_all('div', class_='search-result')
+    result_blocks = soup.find_all('h5', class_='card-title', limit=max_cases)
     cases = []
 
-    for result in results[:max_cases]:
-        link_el = result.find('a')
-        title = link_el.get_text(strip=True) if link_el else "No title"
-        link = "https://tanzlii.org" + link_el['href'] if link_el and link_el.has_attr('href') else None
+    for block in result_blocks:
+        # Extract title and link
+        link_tag = block.find('a', class_='h5')
+        if not link_tag:
+            continue
 
-        date_el = result.find('div', class_='search-result-meta')
-        date = date_el.get_text(strip=True) if date_el else "Date not found"
+        title = link_tag.get_text(strip=True)
+        href = link_tag['href']
+        full_link = "https://tanzlii.org" + href
 
-        snippet_el = result.find('p')
-        summary = snippet_el.get_text(strip=True) if snippet_el else "Summary not found"
+        # Try to find date and summary in nearby elements
+        meta = block.find_next('div', class_='mb-2')
+        date = "Date not found"
+        if meta:
+            date_tag = meta.find('span', class_='me-3')
+            if date_tag:
+                date = date_tag.get_text(strip=True)
+
+        # Get summary — first section’s text-muted content
+        summary = "Summary not found"
+        summary_div = block.find_next('div', class_='mb-1')
+        if summary_div:
+            summary_text = summary_div.find('div', class_='text-muted')
+            if summary_text:
+                summary = summary_text.get_text(strip=True)
 
         cases.append({
             "title": title,
-            "link": link,
+            "link": full_link,
             "date": date,
             "summary": summary,
         })
