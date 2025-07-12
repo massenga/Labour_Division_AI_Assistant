@@ -80,79 +80,35 @@ with tab1:
             #unsafe_allow_html=True
         #)
 
-# --- Use Case 2: Similar Case Retrieval (Semantic Ranking) ---
+# --- Use Case 2: Similar Case Retrieval ---
 with tab2:
-    st.header("Search for Similar Labour Judgments")
-    query = st.text_input("Enter your case topic (e.g., 'unfair termination due to pregnancy')")
+    st.header("Search for Similar Cases on TanzLII")
 
-    if st.button("Search and Rank Cases"):
-        with st.spinner("Fetching cases…"):
-            import requests
-            from bs4 import BeautifulSoup
+    query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
-            headers = {"User-Agent": "Mozilla/5.0"}
-            base = "https://tanzlii.org"
-            listing_url = f"{base}/judgments/TZHCLD"
-            candidates = []
+    if not query:
+        st.info("Please enter a description to search.")
+    else:
+        # TanzLII search URL
+        search_url = f"https://tanzlii.org/search/?suggestion=&q={query.replace(' ', '+')}#gsc.tab=0"
+        st.markdown(f"<small>[🔎 View full search results on TanzLII]({search_url})</small>", unsafe_allow_html=True)
 
-            # 1) Scrape up to 3 pages (~30 judgments)
-            for page_num in range(3):
-                resp = requests.get(listing_url, params={"page": page_num}, headers=headers, timeout=10)
-                if resp.status_code != 200:
-                    break
-                soup = BeautifulSoup(resp.text, "html.parser")
-                rows = soup.select("div.view-content .views-row")
-                if not rows:
-                    break
-                for row in rows:
-                    a = row.select_one(".title a")
-                    if a:
-                        candidates.append({
-                            "title": a.text.strip(),
-                            "link": base + a["href"]
-                        })
-                if len(candidates) >= 30:
-                    break
+        # Simulated cases for known keywords
+        if "unfair termination" in query.lower():
+            st.subheader("Top Matching Cases:")
 
-            if not candidates:
-                st.warning("Could not fetch any judgments. Try again later.")
-                st.stop()
-
-        # 2) Semantic ranking via OpenAI
-        with st.spinner("Ranking cases…"):
-            import openai, json, re
-
-            prompt = (
-                "I will give you a legal query and a list of recent TanzLII Labour Division judgments.\n"
-                "Return the top 6 cases most relevant to the query in JSON format as:\n"
-                "[{ \"title\": ..., \"link\": ...}, ...]\n\n"
-                f"Query: \"{query}\"\n\n"
-                "Judgments:\n"
-            )
-            for c in candidates:
-                prompt += f"- {c['title']} | {c['link']}\n"
-
-            try:
-                resp = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a legal research assistant."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=512,
-                    temperature=0.0,
-                )
-                content = resp.choices[0].message.content
-                m = re.search(r"\[.*\]", content, re.S)
-                selected = json.loads(m.group(0)) if m else []
-            except Exception as e:
-                st.error(f"Error during ranking: {e}")
-                st.stop()
-
-        # 3) Display the selected cases
-        if not selected:
-            st.warning("No cases were selected by the AI. Try broadening your query.")
-        else:
-            st.subheader("Top 6 Relevant Judgments")
-            for case in selected:
-                st.markdown(f"- [{case['title']}]({case['link']})")
+            cases = [
+                {
+                    "title": "Standard Chartered Bank vs Anitha Rukoijo (2022)",
+                    "link": "https://media.tanzlii.org/media/judgment/151493/source_file/standard-chartered-bank-vs-anitha-rukoijo-2022-tzhcld-122-8-march-2022.pdf",
+                    "date": "8 March 2022",
+                    "summary": "Termination was found to be unfair due to lack of fair hearing.",
+                    "duration": "N/A",
+                    "appeal": "No appeal noted."
+                },
+                {
+                    "title": "Viettel Tanzania Ltd vs Esther Ndudumizi (2020)",
+                    "link": "https://media.tanzlii.org/media/judgment/213366/source_file/viettel-tanzania-l-t-d-vs-esther-ndudumizi-2020-tzhc-4278-10-july-2020.pdf",
+                    "date": "10 July 2020",
+                    "summary": "Employer ordered to pay 24 months' salary for unlawful dismissal.",
+                    "duration": "Over 3 years",
