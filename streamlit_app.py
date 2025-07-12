@@ -67,4 +67,4 @@ with tab2:
 
     if query:
         search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-        st.markdown(f"### [Click here to search TanzLII for '{query}']({search_url})")
+        st.markdown(f"### [Click here to search TanzLII for Similar cases to '{query}']({search_url})")
