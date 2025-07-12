@@ -152,11 +152,12 @@ with tab2:
         )
 
         with st.spinner("Fetching and summarizing PDF judgments... this may take a while"):
-            cases  = fetch_and_summarize_pdfs_direct(query, max_pdfs=6)
+            cases = fetch_and_summarize_pdfs_direct(query, max_pdfs=6)
 
         if cases:
             for idx, case in enumerate(cases, start=1):
-                st.subheader(f"Case {idx}: {case['title']}")
+                filename = case['pdf_url'].split('/')[-1]
+                st.subheader(f"Case {idx}: {filename}")
                 st.markdown(f"[Download PDF]({case['pdf_url']})", unsafe_allow_html=True)
                 st.write(case["summary"])
         else:
