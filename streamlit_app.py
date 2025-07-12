@@ -88,7 +88,7 @@ def fetch_and_summarize_pdfs_direct(search_query, max_pdfs=6):
                 break
 
     if not download_links:
-        return [{"summary": "⚠️ No PDF download links found. Try a broader keyword."}]
+        return [{"summary": "No PDF download links found. Try a broader keyword."}]
 
     results = []
 
@@ -107,7 +107,7 @@ def fetch_and_summarize_pdfs_direct(search_query, max_pdfs=6):
                     text += page_text + "\n"
 
             if not text.strip():
-                summary = "⚠️ No extractable text found in PDF."
+                summary = "No extractable text found in PDF."
             else:
                 prompt = (
                     "Summarize the following labour court judgment into 5 key points: "
@@ -135,7 +135,7 @@ def fetch_and_summarize_pdfs_direct(search_query, max_pdfs=6):
         except Exception as e:
             results.append({
                 "pdf_url": pdf_url,
-                "summary": f"⚠️ Error processing PDF: {str(e)}"
+                "summary": f"Error processing PDF: {str(e)}"
             })
 
     return results
