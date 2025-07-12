@@ -61,32 +61,59 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-# --- Use Case 2: Similar Case Retrieval ---
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
-    query = st.text_input("Enter case description (e.g., 'unfair termination', 'overtime', 'leave without pay')")
+    query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
+
+    def search_tanzlii(query, max_pages=3):
+        headers = {"User-Agent": "Mozilla/5.0"}
+        results = []
+        base_url = "https://tanzlii.org"
+        query_tokens = set(query.lower().split())
+
+        for page in range(max_pages):
+            page_url = f"https://tanzlii.org/judgments/TZHCLD?page={page}"
+            resp = requests.get(page_url, headers=headers, timeout=10)
+            if resp.status_code != 200:
+                continue
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for case in soup.select("div.view-content .views-row"):
+                title_tag = case.select_one(".title a")
+                if not title_tag:
+                    continue
+                title = title_tag.text.strip()
+                title_tokens = set(title.lower().split())
+                if query_tokens & title_tokens:
+                    link = base_url + title_tag["href"]
+                    results.append((title, link))
+                    if len(results) >= 6:
+                        return results
+        return results
+
+    def extract_case_details(link):
+        headers = {"User-Agent": "Mozilla/5.0"}
+        try:
+            resp = requests.get(link, headers=headers, timeout=10)
+            if resp.status_code != 200:
+                return ""
+            soup = BeautifulSoup(resp.text, "html.parser")
+            content = soup.get_text(separator="\n")
+            lines = content.splitlines()
+            for line in lines:
+                if "Outcome:" in line or "Judgment" in line:
+                    return f" **Detail:** {line.strip()}"
+        except:
+            return ""
+        return ""
 
     if st.button("Find Similar Judgments"):
-        with st.spinner("Searching TanzLII..."):
-            try:
-                search_url = f"https://tanzlii.org/judgments/TZHCLD?search_api_fulltext={query.replace(' ', '+')}"
-                headers = {"User-Agent": "Mozilla/5.0"}
-                response = requests.get(search_url, headers=headers, timeout=10)
-
-                if response.status_code != 200:
-                    st.error(f"Failed to retrieve data, status code: {response.status_code}")
-                else:
-                    soup = BeautifulSoup(response.text, "html.parser")
-                    cases = soup.select("div.views-row .title a")
-
-                    if not cases:
-                        st.warning("No similar cases found.")
-                    else:
-                        st.subheader("Top Matching Cases")
-                        for i, case in enumerate(cases[:6]):
-                            title = case.text.strip()
-                            link = "https://tanzlii.org" + case.get("href", "")
-                            st.markdown(f"- [{title}]({link})")
-
-            except Exception as e:
-                st.error(f"Error retrieving cases: {e}")
+        with st.spinner("Scraping TanzLII judgments..."):
+            results = search_tanzlii(query)
+            if results:
+                st.subheader("Similar Cases Found")
+                for title, link in results:
+                    details = extract_case_details(link)
+                    st.markdown(f"- [{title}]({link}){details}")
+            else:
+                st.warning("No similar cases found.")
