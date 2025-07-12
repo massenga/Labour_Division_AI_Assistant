@@ -4,7 +4,7 @@ from PyPDF2 import PdfReader
 import openai
 import requests
 from bs4 import BeautifulSoup
-import io
+import feedparser
 
 # Load OpenAI API key
 openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
@@ -73,73 +73,45 @@ with tab1:
             #unsafe_allow_html=True
         #)
 
-def scrape_tanzlii_cases(query, max_cases=6):
-    search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+def fetch_filtered_judgments(search_term, max_items=6):
+    feed_url = "https://tanzlii.org/feeds/all.xml"
+    feed = feedparser.parse(feed_url)
 
-    response = requests.get(search_url, headers=headers)
-    if response.status_code != 200:
-        return []
+    filtered = []
+    search_term_lower = search_term.lower()
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    for entry in feed.entries:
+        title = entry.title.lower()
+        summary = entry.summary.lower() if hasattr(entry, 'summary') else ""
+        
+        if search_term_lower in title or search_term_lower in summary:
+            filtered.append({
+                "title": entry.title,
+                "link": entry.link,
+                "published": entry.published if hasattr(entry, 'published') else "No date",
+                "summary": entry.summary if hasattr(entry, 'summary') else "No summary",
+            })
+            if len(filtered) >= max_items:
+                break
 
-    result_blocks = soup.find_all('h5', class_='card-title', limit=max_cases)
-    cases = []
-
-    for block in result_blocks:
-        # Extract title and link
-        link_tag = block.find('a', class_='h5')
-        if not link_tag:
-            continue
-
-        title = link_tag.get_text(strip=True)
-        href = link_tag['href']
-        full_link = "https://tanzlii.org" + href
-
-        # Try to find date and summary in nearby elements
-        meta = block.find_next('div', class_='mb-2')
-        date = "Date not found"
-        if meta:
-            date_tag = meta.find('span', class_='me-3')
-            if date_tag:
-                date = date_tag.get_text(strip=True)
-
-        # Get summary — first section’s text-muted content
-        summary = "Summary not found"
-        summary_div = block.find_next('div', class_='mb-1')
-        if summary_div:
-            summary_text = summary_div.find('div', class_='text-muted')
-            if summary_text:
-                summary = summary_text.get_text(strip=True)
-
-        cases.append({
-            "title": title,
-            "link": full_link,
-            "date": date,
-            "summary": summary,
-        })
-
-    return cases
-
+    return filtered
 
 with tab2:
-    st.header("Search for Similar Cases on TanzLII")
-    query = st.text_input("Enter case description")
+    st.header("Search for Similar Cases on TanzLII (via RSS Feed)")
+
+    query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
     if query:
-        cases = scrape_tanzlii_cases(query)
-        search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-        st.markdown(f"<small>[Click here to search TanzLII for '{query}']({search_url})</small>", unsafe_allow_html=True)
+        cases = fetch_filtered_judgments(query, max_items=6)
 
         if cases:
-            st.subheader("Top Matching Cases:")
+            st.subheader(f"Top matching cases for '{query}':")
             for case in cases:
-                st.markdown(f"""
-                    <div style='font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.5em;'>
-                        <strong><a href="{case['link']}" target="_blank">{case['title']}</a></strong><br>
-                        📅 <strong>Date:</strong> {case['date']}<br>
-                        📄 <strong>Summary:</strong> {case['summary']}
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"### [{case['title']}]({case['link']})")
+                st.markdown(f"**Published:** {case['published']}")
+                st.markdown(f"**Summary:** {case['summary']}")
+                st.markdown("---")
         else:
             st.warning("No matching summaries available. Try a broader keyword.")
+    else:
+        st.info("Please enter a keyword to search judgments.")
