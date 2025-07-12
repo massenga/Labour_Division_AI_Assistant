@@ -180,7 +180,7 @@ with tab2:
         )
 
         with st.spinner("Fetching and summarizing PDF judgments... this may take a while"):
-            cases = fetch_and_summarize_pdfs(query, max_cases=6)
+            cases  = fetch_pdf_summaries_from_search(query, max_pdfs=6)
 
         if cases:
             for idx, case in enumerate(cases, start=1):
