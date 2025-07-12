@@ -84,13 +84,15 @@ with tab2:
                     st.error(f"Failed to retrieve search results (status {response.status_code})")
                 else:
                     soup = BeautifulSoup(response.text, "html.parser")
-                    # Each search result usually inside div with class 'gs-title' or similar
                     results = []
-                    # Look for search result links
-                    # TanzLII search results have links inside <div class="gs-title"><a href=...>
-                    for item in soup.select("div.gs-title a"):
-                        title = item.get_text(strip=True)
-                        link = item['href']
+
+                    # TanzLII search results are in div.search-result-item
+                    for item in soup.select("div.search-result-item"):
+                        title_tag = item.select_one("h3 a")
+                        if not title_tag:
+                            continue
+                        title = title_tag.get_text(strip=True)
+                        link = title_tag["href"]
                         if not link.startswith("http"):
                             link = "https://tanzlii.org" + link
                         results.append((title, link))
@@ -105,4 +107,3 @@ with tab2:
                         st.warning("No cases found in the search results.")
             except Exception as e:
                 st.error(f"Error fetching search results: {e}")
-
