@@ -118,7 +118,7 @@ def scrape_tanzlii_cases(query, max_cases=6):
 
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
-    query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
+    query = st.text_input("Enter case description")
 
     if query:
         cases = scrape_tanzlii_cases(query)
