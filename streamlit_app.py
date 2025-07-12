@@ -82,88 +82,54 @@ with tab1:
 
 # --- Use Case 2: Similar Case Retrieval ---
 with tab2:
-    st.header("Find Similar Labour Judgments on TanzLII")
+    st.header("Search for Similar Cases on TanzLII")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
-    if st.button("Search and Summarize Cases"):
-        headers = {"User-Agent": "Mozilla/5.0"}
-        base = "https://tanzlii.org"
-        listing = f"{base}/judgments/TZHCLD"
-        max_pages = 5
-        limit = 6
-        found = []
-        q = query.lower().strip()
+    if st.button("Find Similar Judgments"):
+        with st.spinner("Retrieving and filtering judgments..."):
+            headers = {"User-Agent": "Mozilla/5.0"}
+            base_url = "https://tanzlii.org"
+            listing_url = f"{base_url}/judgments/TZHCLD"
+            max_pages = 5
+            limit = 6
 
-        # 1) Find matching case titles & links
-        for pg in range(max_pages):
-            resp = requests.get(listing, params={"page": pg}, headers=headers, timeout=10)
-            if resp.status_code != 200:
-                break
-            page_soup = BeautifulSoup(resp.text, "html.parser")
-            rows = page_soup.select("div.view-content .views-row")
-            if not rows:
-                break
+            # Tokenize query
+            q_tokens = set(word for word in query.lower().split() if len(word) >= 3)
+            matches = []
 
-            for row in rows:
-                a = row.select_one(".title a")
-                if not a:
-                    continue
-                title = a.text.strip()
-                if q not in title.lower():
-                    continue
-                link = base + a["href"]
-                found.append((title, link))
-                if len(found) >= limit:
+            # Scrape listing pages
+            for page in range(max_pages):
+                resp = requests.get(listing_url, params={"page": page}, headers=headers, timeout=10)
+                if resp.status_code != 200:
                     break
-            if len(found) >= limit:
-                break
+                soup = BeautifulSoup(resp.text, "html.parser")
+                rows = soup.select("div.view-content .views-row")
+                if not rows:
+                    break
 
-        # 2) For each match, fetch details and display
-        if not found:
-            st.warning("No similar cases found. Try a broader keyword.")
-        else:
-            st.subheader("Top Matching Judgments")
-            for title, link in found:
-                # Fetch judgment page
-                case_resp = requests.get(link, headers=headers, timeout=10)
-                case_soup = BeautifulSoup(case_resp.text, "html.parser")
+                for row in rows:
+                    a = row.select_one(".title a")
+                    if not a:
+                        continue
+                    title = a.text.strip()
+                    title_lower = title.lower()
 
-                # Extract Cause: first paragraph of body
-                paras = [p.get_text(strip=True)
-                         for p in case_soup.select("div.field--name-body p")]
-                cause = paras[0] if paras else "Not found"
+                    # Debug: show scraped titles
+                    st.text(f"Scraped Title: {title}")
 
-                # Extract Outcome
-                outcome = "Not found"
-                for heading in case_soup.find_all(["h2","h3"]):
-                    h = heading.get_text(strip=True).lower()
-                    if "outcome" in h or "decision" in h:
-                        sib = heading.find_next_sibling(["p","div"])
-                        if sib:
-                            outcome = sib.get_text(strip=True)
-                        break
+                    # Match if any query token appears in the title
+                    if any(tok in title_lower for tok in q_tokens):
+                        link = base_url + a["href"]
+                        matches.append((title, link))
+                        if len(matches) >= limit:
+                            break
+                if len(matches) >= limit:
+                    break
 
-                # Extract a date (judgment date) and estimate duration
-                import re
-                all_text = case_soup.get_text(separator=" ")
-                dates = re.findall(r"\b\d{1,2}\s+\w+\s+\d{4}\b", all_text)
-                duration = dates[-1] if dates else "Date not found"
-
-                # Extract Appeals
-                appeals = "None recorded"
-                for heading in case_soup.find_all(["h2","h3"]):
-                    h = heading.get_text(strip=True).lower()
-                    if "appeal" in h:
-                        sib = heading.find_next_sibling(["p","div"])
-                        if sib:
-                            appeals = sib.get_text(strip=True)
-                        break
-
-                # Render
-                st.markdown(f"### [{title}]({link})")
-                st.markdown(f"- **Cause:** {cause}")
-                st.markdown(f"- **Outcome:** {outcome}")
-                st.markdown(f"- **Duration/Date:** {duration}")
-                st.markdown(f"- **Appeals:** {appeals}")
-                st.markdown("---")
-
+            # Display results
+            if matches:
+                st.subheader("Top Matching Judgments")
+                for title, link in matches:
+                    st.markdown(f"- [{title}]({link})")
+            else:
+                st.warning("No similar cases found. Try broader or different keywords.")
