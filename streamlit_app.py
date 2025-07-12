@@ -65,55 +65,12 @@ with tab2:
     st.header("Search for Similar Cases on TanzLII")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
-    def search_tanzlii(query, max_pages=3):
-        headers = {"User-Agent": "Mozilla/5.0"}
-        results = []
-        base_url = "https://tanzlii.org"
-        query_tokens = set(query.lower().split())
-
-        for page in range(max_pages):
-            page_url = f"https://tanzlii.org/judgments/TZHCLD?page={page}"
-            resp = requests.get(page_url, headers=headers, timeout=10)
-            if resp.status_code != 200:
-                continue
-
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for case in soup.select("div.view-content .views-row"):
-                title_tag = case.select_one(".title a")
-                if not title_tag:
-                    continue
-                title = title_tag.text.strip()
-                title_tokens = set(title.lower().split())
-                if query_tokens & title_tokens:
-                    link = base_url + title_tag["href"]
-                    results.append((title, link))
-                    if len(results) >= 6:
-                        return results
-        return results
-
-    def extract_case_details(link):
-        headers = {"User-Agent": "Mozilla/5.0"}
-        try:
-            resp = requests.get(link, headers=headers, timeout=10)
-            if resp.status_code != 200:
-                return ""
-            soup = BeautifulSoup(resp.text, "html.parser")
-            content = soup.get_text(separator="\n")
-            lines = content.splitlines()
-            for line in lines:
-                if "Outcome:" in line or "Judgment" in line:
-                    return f" **Detail:** {line.strip()}"
-        except:
-            return ""
-        return ""
-
     if st.button("Find Similar Judgments"):
-        with st.spinner("Scraping TanzLII judgments..."):
-            results = search_tanzlii(query)
-            if results:
-                st.subheader("Similar Cases Found")
-                for title, link in results:
-                    details = extract_case_details(link)
-                    st.markdown(f"- [{title}]({link}){details}")
-            else:
-                st.warning("No similar cases found.")
+        if query.strip() == "":
+            st.warning("Please enter a search query.")
+        else:
+            # Generate TanzLII search URL
+            encoded_query = query.strip().replace(" ", "+")
+            search_url = f"https://tanzlii.org/judgments/TZHCLD?search_api_fulltext={encoded_query}"
+            st.success("Click below to view similar judgments on TanzLII:")
+            st.markdown(f"[🔍 View Results for '{query}']({search_url})", unsafe_allow_html=True)
