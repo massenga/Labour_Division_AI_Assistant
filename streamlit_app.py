@@ -60,51 +60,11 @@ with tab1:
     else:
         st.info("Please upload a PDF to summarize.")
 
-#with tab2:
-    #st.header("Search for Similar Cases on TanzLII")
-    #query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
-
-    #if query:
-        #search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-        #st.markdown(f"### [Click here to search TanzLII for '{query}']({search_url})")
-
 # --- Use Case 2: Similar Case Retrieval ---
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
-    query = st.text_input("Enter keywords (e.g., 'unfair termination due to pregnancy')")
+    query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
-    def search_tanzlii_judgments(query, max_pages=5, max_results=6):
-        headers = {"User-Agent": "Mozilla/5.0"}
-        base_url = "https://tanzlii.org"
-        results = []
-        query_tokens = set(query.lower().split())
-
-        for page_num in range(max_pages):
-            page_url = f"{base_url}/judgments/TZHCLD?page={page_num}"
-            resp = requests.get(page_url, headers=headers, timeout=10)
-            if resp.status_code != 200:
-                continue
-
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for case_div in soup.select("div.view-content .views-row"):
-                title_tag = case_div.select_one(".title a")
-                if not title_tag:
-                    continue
-                title = title_tag.text.strip()
-                title_tokens = set(title.lower().split())
-                if query_tokens & title_tokens:
-                    link = base_url + title_tag["href"]
-                    results.append((title, link))
-                    if len(results) >= max_results:
-                        return results
-        return results
-
-    if st.button("Find Similar Judgments"):
-        with st.spinner("Scraping TanzLII for judgments..."):
-            matches = search_tanzlii_judgments(query)
-            if matches:
-                st.subheader("Matching Judgments")
-                for title, link in matches:
-                    st.markdown(f"- [{title}]({link})")
-            else:
-                st.warning("No similar cases found. Try more general keywords.")
+    if query:
+        search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
+        st.markdown(f"### [Click here to search TanzLII for '{query}']({search_url})")
