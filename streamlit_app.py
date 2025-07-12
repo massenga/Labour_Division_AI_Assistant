@@ -64,97 +64,108 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-def fetch_and_summarize_pdfs(search_query, max_cases=6):
+def fetch_pdf_summaries_from_search(search_query, max_pdfs=6, debug=False):
     search_url = f"https://tanzlii.org/search/?q={search_query.replace(' ', '+')}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(search_url, headers=headers)
-    if response.status_code != 200:
-        return []
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    try:
+        response = requests.get(search_url, headers=headers)
+        if response.status_code != 200:
+            if debug:
+                print(f"Failed to fetch search results. Status code: {response.status_code}")
+            return []
 
-    # Step 1: Get case links and titles
-    case_links = []
-    for a_tag in soup.find_all("a", class_="h5 text-primary"):
-        href = a_tag.get("href")
-        title = a_tag.get_text(strip=True)
-        if href and title:
-            full_case_url = urljoin(search_url, href)
-            case_links.append({"title": title, "case_url": full_case_url})
-            if len(case_links) >= max_cases:
-                break
+        soup = BeautifulSoup(response.text, "html.parser")
 
-    print("Case links found:")
-    for c in case_links:
-        print(c["title"], c["case_url"])
-    
-    results = []
+        # Get all case links from search page
+        case_links = []
+        for tag in soup.select("h5.card-title a"):
+            href = tag.get("href")
+            if href and href.startswith("/akn/"):
+                case_links.append(urljoin(search_url, href))
+                if len(case_links) >= max_pdfs:
+                    break
 
-    # Step 2: For each case, get the PDF link and summarize
-    for case in case_links:
-        try:
-            case_resp = requests.get(case["case_url"], headers=headers)
-            case_resp.raise_for_status()
-            case_soup = BeautifulSoup(case_resp.text, "html.parser")
+        if debug:
+            print(f"Found {len(case_links)} case links.")
 
-            # Find PDF download link ending with '/source'
-            pdf_link_tag = case_soup.find("a", href=lambda x: x and x.endswith("/source"))
-            if not pdf_link_tag:
-                results.append({
-                    "title": case["title"],
-                    "pdf_url": None,
-                    "summary": "⚠️ PDF link not found on case page."
-                })
+        # From each case page, find the PDF link
+        pdf_cases = []
+        for case_url in case_links:
+            case_resp = requests.get(case_url, headers=headers)
+            if case_resp.status_code != 200:
                 continue
 
-            pdf_url = urljoin(case["case_url"], pdf_link_tag["href"])
+            case_soup = BeautifulSoup(case_resp.text, "html.parser")
+            pdf_tag = case_soup.find("a", string="Download", href=True)
 
-            pdf_response = requests.get(pdf_url, headers=headers)
-            pdf_response.raise_for_status()
-            pdf_bytes = pdf_response.content
+            if pdf_tag:
+                pdf_url = urljoin(case_url, pdf_tag["href"])
+                pdf_cases.append(pdf_url)
 
-            reader = PdfReader(BytesIO(pdf_bytes))
-            text = ""
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
+                if debug:
+                    print(f"Found PDF: {pdf_url}")
 
-            if not text.strip():
-                summary = "⚠️ No extractable text found in PDF."
-            else:
-                prompt = (
-                    "Summarize the following labour court judgment into 5 key points: "
-                    "1) cause of dispute, 2) legal reasoning, 3) final ruling, "
-                    "4) cited laws, and 5) potential impact or precedent.\n\n"
-                    f"{text[:3000]}"
-                )
+            if len(pdf_cases) >= max_pdfs:
+                break
 
-                response = openai.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a legal assistant."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=500,
-                    temperature=0.4,
-                )
-                summary = response.choices[0].message.content
+        if not pdf_cases:
+            if debug:
+                print("❌ No PDF judgments found for the given query.")
+            return []
 
-            results.append({
-                "title": case["title"],
-                "pdf_url": pdf_url,
-                "summary": summary,
-            })
+        # Summarize PDFs
+        results = []
+        for pdf_url in pdf_cases:
+            try:
+                pdf_resp = requests.get(pdf_url)
+                pdf_resp.raise_for_status()
 
-        except Exception as e:
-            results.append({
-                "title": case["title"],
-                "pdf_url": None,
-                "summary": f"Error processing case: {e}",
-            })
+                reader = PdfReader(BytesIO(pdf_resp.content))
+                text = ""
+                for page in reader.pages:
+                    content = page.extract_text()
+                    if content:
+                        text += content + "\n"
 
-    return results
+                if not text.strip():
+                    summary = "⚠️ No extractable text found in PDF."
+                else:
+                    prompt = (
+                        "Summarize the following labour court judgment into 5 key points: "
+                        "1) cause of dispute, 2) legal reasoning, 3) final ruling, "
+                        "4) cited laws, and 5) potential impact or precedent.\n\n"
+                        f"{text[:3000]}"
+                    )
+
+                    response = openai.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You are a legal assistant."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=500,
+                        temperature=0.4
+                    )
+                    summary = response.choices[0].message.content
+
+                results.append({
+                    "pdf_url": pdf_url,
+                    "summary": summary
+                })
+
+            except Exception as e:
+                results.append({
+                    "pdf_url": pdf_url,
+                    "summary": f"❌ Error processing PDF: {e}"
+                })
+
+        return results
+
+    except Exception as e:
+        if debug:
+            print(f"Unexpected error: {e}")
+        return []
 
 
 with tab2:
