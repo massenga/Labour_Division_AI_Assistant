@@ -61,10 +61,22 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
+#with tab2:
+    #st.header("Search for Similar Cases on TanzLII")
+    #query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
+
+    #if query:
+        #search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
+        #st.markdown(f"### [Click here to search TanzLII for Similar cases to '{query}']({search_url})")
+
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
     if query:
         search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-        st.markdown(f"### [Click here to search TanzLII for Similar cases to '{query}']({search_url})")
+        st.markdown(
+            f"<small>[Click here to search TanzLII for Similar cases to '{query}']({search_url})</small>",
+            unsafe_allow_html=True
+        )
+
