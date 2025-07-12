@@ -74,116 +74,54 @@ with tab1:
         #)
 
 
-def fetch_and_summarize_cases(query, max_cases=6):
-    headers = {"User-Agent": "Mozilla/5.0"}
+def scrape_tanzlii_cases(query, max_cases=6):
+    import requests
+    from bs4 import BeautifulSoup
+
     search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; TanzLII-Bot/1.0)"
+    }
+
     response = requests.get(search_url, headers=headers)
     if response.status_code != 200:
         return []
 
     soup = BeautifulSoup(response.text, 'html.parser')
-    results = soup.select('.gsc-webResult')
+    container = soup.find('div', class_='list-unstyled search-result-list')
+    if not container:
+        return []
 
-    # Debug: print a snippet of the HTML
-    st.write("HTML snippet of search page:")
-    st.write(response.text[:1000])  # first 1000 characters
-    
-    # Find results container — check if selector matches page structure
-    results = soup.select('.gsc-webResult')
-    st.write(f"Number of results found: {len(results)}")  # Debug count
-
-    if len(results) == 0:
-        st.warning("No search results found. Check CSS selector or page structure.")
-
+    results = container.find_all('div', class_='search-result')
     cases = []
+
     for result in results[:max_cases]:
-        title_el = result.select_one('.gs-title a')
-        if not title_el:
-            continue
+        link_el = result.find('a')
+        title = link_el.get_text(strip=True) if link_el else "No title"
+        link = "https://tanzlii.org" + link_el['href'] if link_el and link_el.has_attr('href') else None
 
-        title = title_el.get_text(strip=True)
-        link = title_el['href']
+        date_el = result.find('div', class_='search-result-meta')
+        date = date_el.get_text(strip=True) if date_el else "Date not found"
 
-        # Get case page to find PDF link
-        case_page = requests.get(link, headers=headers)
-        if case_page.status_code != 200:
-            continue
-        case_soup = BeautifulSoup(case_page.text, 'html.parser')
-
-        # Find first PDF link
-        pdf_link = None
-        for a in case_soup.find_all('a', href=True):
-            href = a['href']
-            if href.lower().endswith('.pdf'):
-                if href.startswith('/'):
-                    pdf_link = 'https://tanzlii.org' + href
-                elif href.startswith('http'):
-                    pdf_link = href
-                else:
-                    pdf_link = link.rsplit('/', 1)[0] + '/' + href
-                break
-
-        if not pdf_link:
-            continue
-
-        # Download PDF and extract text
-        pdf_resp = requests.get(pdf_link, headers=headers)
-        if pdf_resp.status_code != 200:
-            continue
-        pdf_bytes = io.BytesIO(pdf_resp.content)
-        reader = PdfReader(pdf_bytes)
-        full_text = ""
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                full_text += page_text + "\n"
-        if not full_text.strip():
-            continue
-
-        # Summarize with OpenAI
-        prompt = (
-            "Summarize the following labour court judgment into 5 key points, including: "
-            "1) cause of dispute, 2) legal reasoning, 3) final ruling, "
-            "4) cited laws, and 5) potential impact or precedent.\n\n"
-            f"{full_text}"
-        )
-        try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a legal assistant."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=500,
-                temperature=0.4
-            )
-            summary = response.choices[0].message.content
-        except Exception as e:
-            summary = f"Error summarizing judgment: {e}"
-
-        # Extract date if available
-        date_el = case_soup.find('time') or case_soup.find(class_='date')
-        date_text = date_el.get_text(strip=True) if date_el else "Date not found"
+        snippet_el = result.find('p')
+        summary = snippet_el.get_text(strip=True) if snippet_el else "Summary not found"
 
         cases.append({
             "title": title,
             "link": link,
-            "date": date_text,
+            "date": date,
             "summary": summary,
         })
 
     return cases
 
 
-# --- Streamlit Tab 2 UI ---
 with tab2:
     st.header("Search for Similar Cases on TanzLII")
     query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
 
     if query:
-        with st.spinner("Fetching and summarizing cases..."):
-            cases = fetch_and_summarize_cases(query)
-
+        cases = scrape_tanzlii_cases(query)
         search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
         st.markdown(f"<small>[Click here to search TanzLII for '{query}']({search_url})</small>", unsafe_allow_html=True)
 
@@ -191,11 +129,11 @@ with tab2:
             st.subheader("Top Matching Cases:")
             for case in cases:
                 st.markdown(f"""
-                <div style='font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.5em;'>
-                    <strong><a href="{case['link']}" target="_blank">{case['title']}</a></strong><br>
-                    📅 <strong>Date:</strong> {case['date']}<br>
-                    📄 <strong>Summary:</strong> {case['summary']}
-                </div>
+                    <div style='font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.5em;'>
+                        <strong><a href="{case['link']}" target="_blank">{case['title']}</a></strong><br>
+                        📅 <strong>Date:</strong> {case['date']}<br>
+                        📄 <strong>Summary:</strong> {case['summary']}
+                    </div>
                 """, unsafe_allow_html=True)
         else:
             st.warning("No matching summaries available. Try a broader keyword.")
