@@ -74,7 +74,7 @@ with tab2:
 
     if query:
         search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-        st.markdown(f"### [Full TanzLII search results for '{query}']({search_url})")
+        st.markdown(f"### [View full search results on TanzLII]({search_url})")
 
         with st.spinner("Fetching cases..."):
             try:
@@ -86,24 +86,28 @@ with tab2:
                     soup = BeautifulSoup(response.text, "html.parser")
                     results = []
 
-                    # TanzLII search results are in div.search-result-item
-                    for item in soup.select("div.search-result-item"):
-                        title_tag = item.select_one("h3 a")
+                    for item in soup.select("div.search-result"):
+                        title_tag = item.select_one("h3.search-result__title a")
                         if not title_tag:
                             continue
                         title = title_tag.get_text(strip=True)
                         link = title_tag["href"]
                         if not link.startswith("http"):
                             link = "https://tanzlii.org" + link
+
+                        # Optional filter: only keep links containing "/judgments/"
+                        if "/judgments/" not in link:
+                            continue
+
                         results.append((title, link))
                         if len(results) >= 6:
                             break
 
                     if results:
-                        st.subheader("Top 6 Similar Cases")
+                        st.subheader("Top 6 Judgments Found")
                         for title, link in results:
                             st.markdown(f"- [{title}]({link})")
                     else:
-                        st.warning("No cases found in the search results.")
+                        st.warning("No judgments found in the search results.")
             except Exception as e:
                 st.error(f"Error fetching search results: {e}")
