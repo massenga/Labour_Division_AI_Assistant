@@ -84,6 +84,17 @@ def fetch_and_summarize_cases(query, max_cases=6):
     soup = BeautifulSoup(response.text, 'html.parser')
     results = soup.select('.gsc-webResult')
 
+    # Debug: print a snippet of the HTML
+    st.write("HTML snippet of search page:")
+    st.write(response.text[:1000])  # first 1000 characters
+    
+    # Find results container — check if selector matches page structure
+    results = soup.select('.gsc-webResult')
+    st.write(f"Number of results found: {len(results)}")  # Debug count
+
+    if len(results) == 0:
+        st.warning("No search results found. Check CSS selector or page structure.")
+
     cases = []
     for result in results[:max_cases]:
         title_el = result.select_one('.gs-title a')
