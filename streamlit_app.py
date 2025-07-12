@@ -89,7 +89,7 @@ with tab2:
         st.info("Please enter a description to search.")
     else:
         search_url = f"https://tanzlii.org/search/?suggestion=&q={query.replace(' ', '+')}#gsc.tab=0"
-        st.markdown(f"<small>[🔎 View full search results on TanzLII]({search_url})</small>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size: 0.85rem;'><a href='{search_url}' target='_blank'>🔎 View full search results on TanzLII</a></p>", unsafe_allow_html=True)
 
         if "unfair termination" in query.lower():
             st.subheader("Top Matching Cases:")
@@ -147,12 +147,13 @@ with tab2:
 
             for case in cases:
                 st.markdown(f"""
-                #### [{case['title']}]({case['link']})
-                📅 **Date:** {case['date']}  
-                📄 **Outcome:** {case['summary']}  
-                ⏳ **Duration of Employment:** {case['duration']}  
-                🔁 **Appeal:** {case['appeal']}
-                ---
-                """)
+                <div style='font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.5em;'>
+                    <strong><a href="{case['link']}" target="_blank">{case['title']}</a></strong><br>
+                    📅 <strong>Date:</strong> {case['date']}<br>
+                    📄 <strong>Outcome:</strong> {case['summary']}<br>
+                    ⏳ <strong>Duration:</strong> {case['duration']}<br>
+                    🔁 <strong>Appeal:</strong> {case['appeal']}
+                </div>
+                """, unsafe_allow_html=True)
         else:
             st.warning("No matching summaries available. Try a broader keyword.")
