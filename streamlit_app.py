@@ -80,56 +80,79 @@ with tab1:
             #unsafe_allow_html=True
         #)
 
-# --- Use Case 2: Similar Case Retrieval ---
+# --- Use Case 2: Similar Case Retrieval (Semantic Ranking) ---
 with tab2:
-    st.header("Search for Similar Cases on TanzLII")
-    query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
+    st.header("Search for Similar Labour Judgments (Semantic Ranking)")
+    query = st.text_input("Enter your case topic (e.g., 'unfair termination due to pregnancy')")
 
     if st.button("Find Similar Judgments"):
-        with st.spinner("Retrieving and filtering judgments..."):
+        with st.spinner("Fetching cases and ranking…"):
+            # 1) Scrape a batch of recent judgments
+            import requests
+            from bs4 import BeautifulSoup
+
             headers = {"User-Agent": "Mozilla/5.0"}
-            base_url = "https://tanzlii.org"
-            listing_url = f"{base_url}/judgments/TZHCLD"
-            max_pages = 5
-            limit = 6
+            base = "https://tanzlii.org"
+            listing = f"{base}/judgments/TZHCLD"
+            candidates = []
 
-            # Tokenize query
-            q_tokens = set(word for word in query.lower().split() if len(word) >= 3)
-            matches = []
-
-            # Scrape listing pages
-            for page in range(max_pages):
-                resp = requests.get(listing_url, params={"page": page}, headers=headers, timeout=10)
+            for page in range(3):  # first 3 pages ~30 cases
+                resp = requests.get(listing, params={"page": page}, headers=headers, timeout=10)
                 if resp.status_code != 200:
                     break
                 soup = BeautifulSoup(resp.text, "html.parser")
-                rows = soup.select("div.view-content .views-row")
-                if not rows:
-                    break
-
-                for row in rows:
+                for row in soup.select("div.view-content .views-row"):
                     a = row.select_one(".title a")
                     if not a:
                         continue
                     title = a.text.strip()
-                    title_lower = title.lower()
-
-                    # Debug: show scraped titles
-                    st.text(f"Scraped Title: {title}")
-
-                    # Match if any query token appears in the title
-                    if any(tok in title_lower for tok in q_tokens):
-                        link = base_url + a["href"]
-                        matches.append((title, link))
-                        if len(matches) >= limit:
-                            break
-                if len(matches) >= limit:
+                    link = base + a["href"]
+                    candidates.append({"title": title, "link": link})
+                if len(candidates) >= 30:
                     break
 
-            # Display results
-            if matches:
-                st.subheader("Top Matching Judgments")
-                for title, link in matches:
-                    st.markdown(f"- [{title}]({link})")
+            if not candidates:
+                st.warning("Could not fetch any judgments from TanzLII.")
+                return
+
+            # 2) Ask OpenAI to rank the top 6 relevant cases
+            import openai
+            # Build the prompt
+            prompt = (
+                "I will give you a legal query and a list of recent TanzLII Labour Division judgments.\n"
+                "Please return the top 6 cases most relevant to the query, in JSON list form:\n"
+                "[{ \"title\": ..., \"link\": ... }, ...]\n\n"
+                f"Query: \"{query}\"\n\n"
+                "Judgments:\n"
+            )
+            for c in candidates:
+                prompt += f"- {c['title']} | {c['link']}\n"
+
+            try:
+                resp = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are a legal research assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=512,
+                    temperature=0.0,
+                )
+                content = resp.choices[0].message.content.strip()
+                # Parse JSON out of the response
+                import json, re
+                match = re.search(r"\[.*\]", content, re.S)
+                selected = json.loads(match.group(0)) if match else []
+            except Exception as e:
+                st.error(f"Error ranking cases: {e}")
+                return
+
+            # 3) Display the selected top 6 cases
+            if not selected:
+                st.warning("No cases selected by the AI. Try broadening your query.")
             else:
-                st.warning("No similar cases found. Try broader or different keywords.")
+                st.subheader("Top 6 Semantically Relevant Judgments")
+                for case in selected:
+                    title = case.get("title")
+                    link = case.get("link")
+                    st.markdown(f"- [{title}]({link})")
