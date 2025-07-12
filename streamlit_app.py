@@ -156,9 +156,15 @@ with tab2:
 
         if cases:
             for idx, case in enumerate(cases, start=1):
-                filename = case['pdf_url'].split('/')[-1]
-                st.subheader(f"Case {idx}: {filename}")
-                st.markdown(f"[Download PDF]({case['pdf_url']})", unsafe_allow_html=True)
-                st.write(case["summary"])
+                pdf_url = case.get('pdf_url')
+                if pdf_url:
+                    filename = pdf_url.split('/')[-1]
+                    st.subheader(f"Case {idx}: {filename}")
+                    st.markdown(f"[Download PDF]({pdf_url})", unsafe_allow_html=True)
+                else:
+                    st.subheader(f"Case {idx}: PDF URL not available")
+
+                summary = case.get("summary", "No summary available")
+                st.write(summary)
         else:
             st.warning("No PDF judgments found for the given query. Try a broader keyword.")
