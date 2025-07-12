@@ -82,46 +82,50 @@ with tab1:
 
 # --- Use Case 2: Similar Case Retrieval (Semantic Ranking) ---
 with tab2:
-    st.header("Search for Similar Labour Judgments (Semantic Ranking)")
+    st.header("Search for Similar Labour Judgments")
     query = st.text_input("Enter your case topic (e.g., 'unfair termination due to pregnancy')")
 
-    if st.button("Find Similar Judgments"):
-        with st.spinner("Fetching cases and ranking…"):
-            # 1) Scrape a batch of recent judgments
+    if st.button("Search and Rank Cases"):
+        with st.spinner("Fetching cases…"):
             import requests
             from bs4 import BeautifulSoup
 
             headers = {"User-Agent": "Mozilla/5.0"}
             base = "https://tanzlii.org"
-            listing = f"{base}/judgments/TZHCLD"
+            listing_url = f"{base}/judgments/TZHCLD"
             candidates = []
 
-            for page in range(3):  # first 3 pages ~30 cases
-                resp = requests.get(listing, params={"page": page}, headers=headers, timeout=10)
+            # 1) Scrape up to 3 pages (~30 judgments)
+            for page_num in range(3):
+                resp = requests.get(listing_url, params={"page": page_num}, headers=headers, timeout=10)
                 if resp.status_code != 200:
                     break
                 soup = BeautifulSoup(resp.text, "html.parser")
-                for row in soup.select("div.view-content .views-row"):
+                rows = soup.select("div.view-content .views-row")
+                if not rows:
+                    break
+                for row in rows:
                     a = row.select_one(".title a")
-                    if not a:
-                        continue
-                    title = a.text.strip()
-                    link = base + a["href"]
-                    candidates.append({"title": title, "link": link})
+                    if a:
+                        candidates.append({
+                            "title": a.text.strip(),
+                            "link": base + a["href"]
+                        })
                 if len(candidates) >= 30:
                     break
 
             if not candidates:
-                st.warning("Could not fetch any judgments from TanzLII.")
-                return
+                st.warning("Could not fetch any judgments. Try again later.")
+                st.stop()
 
-            # 2) Ask OpenAI to rank the top 6 relevant cases
-            import openai
-            # Build the prompt
+        # 2) Semantic ranking via OpenAI
+        with st.spinner("Ranking cases…"):
+            import openai, json, re
+
             prompt = (
                 "I will give you a legal query and a list of recent TanzLII Labour Division judgments.\n"
-                "Please return the top 6 cases most relevant to the query, in JSON list form:\n"
-                "[{ \"title\": ..., \"link\": ... }, ...]\n\n"
+                "Return the top 6 cases most relevant to the query in JSON format as:\n"
+                "[{ \"title\": ..., \"link\": ...}, ...]\n\n"
                 f"Query: \"{query}\"\n\n"
                 "Judgments:\n"
             )
@@ -138,21 +142,17 @@ with tab2:
                     max_tokens=512,
                     temperature=0.0,
                 )
-                content = resp.choices[0].message.content.strip()
-                # Parse JSON out of the response
-                import json, re
-                match = re.search(r"\[.*\]", content, re.S)
-                selected = json.loads(match.group(0)) if match else []
+                content = resp.choices[0].message.content
+                m = re.search(r"\[.*\]", content, re.S)
+                selected = json.loads(m.group(0)) if m else []
             except Exception as e:
-                st.error(f"Error ranking cases: {e}")
-                return
+                st.error(f"Error during ranking: {e}")
+                st.stop()
 
-            # 3) Display the selected top 6 cases
-            if not selected:
-                st.warning("No cases selected by the AI. Try broadening your query.")
-            else:
-                st.subheader("Top 6 Semantically Relevant Judgments")
-                for case in selected:
-                    title = case.get("title")
-                    link = case.get("link")
-                    st.markdown(f"- [{title}]({link})")
+        # 3) Display the selected cases
+        if not selected:
+            st.warning("No cases were selected by the AI. Try broadening your query.")
+        else:
+            st.subheader("Top 6 Relevant Judgments")
+            for case in selected:
+                st.markdown(f"- [{case['title']}]({case['link']})")
