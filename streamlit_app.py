@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from urllib.parse import quote_plus, urljoin
 from io import BytesIO
 from playwright.sync_api import sync_playwright
+import re
 
 # Load OpenAI API key
 openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
@@ -72,17 +73,33 @@ def generate_search_url(search_query):
     base_url = "https://tanzlii.org"
     encoded_query = quote_plus(search_query)
     search_url = f"{base_url}/search/?suggestion=&q={encoded_query}#gsc.tab=0"
-    site_url = search_url.read()
-    extracted_links = re.findall('"((http)s?://.*?)"', str(site_url))
-    return extracted_links
+
+    # Fetch the page content
+    response = requests.get(search_url)
+    site_html = response.text
+
+    # Extract absolute http(s) links using your regex
+    extracted_links = re.findall(r'"((http)s?://.*?)"', site_html)
+
+    # extracted_links is a list of tuples, extract only full URLs
+    full_links = [link[0] for link in extracted_links]
+
+    return full_links, search_url
 
 with tab2:
     st.header("Generate TanzLII Search URL")
     query = st.text_input("Enter case description (e.g., 'termination of employment')")
 
     if query:
-        with st.spinner("Generating search link..."):
-            search_url = generate_search_url(query)
+        with st.spinner("Generating search link and extracting links..."):
+            extracted_links, search_url = generate_search_url(query)
 
         st.markdown("### 🔗 TanzLII Search URL:")
         st.markdown(f"[{search_url}]({search_url})", unsafe_allow_html=True)
+
+        st.markdown("### 🔍 Extracted Links:")
+        if extracted_links:
+            for idx, link in enumerate(extracted_links, 1):
+                st.markdown(f"{idx}. [{link}]({link})")
+        else:
+            st.info("No links found with your regex.")
