@@ -80,6 +80,7 @@ def generate_search_url_and_extract_links(search_query):
     # Regex to find href="/akn/tz/judgment...."
     pattern = r'href="(/akn/tz/judgment[^"]*)"'
     relative_links = re.findall(pattern, page_content)
+    print(page_content[:2000])
 
     # Convert relative URLs to full URLs
     full_links = [urljoin(base_url, link) for link in relative_links]
