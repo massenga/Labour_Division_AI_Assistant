@@ -69,37 +69,37 @@ with tab1:
 
 # --- Use Case 2: Similar Case Retrieval ---
 
-def generate_search_url(search_query):
+def generate_search_url_and_extract_links(search_query):
     base_url = "https://tanzlii.org"
     encoded_query = quote_plus(search_query)
     search_url = f"{base_url}/search/?suggestion=&q={encoded_query}#gsc.tab=0"
 
-    # Fetch the page content
+    # Load the search URL page content
     response = requests.get(search_url)
-    site_html = response.text
+    page_content = response.text
 
-    # Extract absolute http(s) links using your regex
-    extracted_links = re.findall(r'"((http)s?://.*?)"', site_html)
+    # Pull all absolute http(s) links from the page content using your regex
+    found_links = re.findall(r'"((http)s?://.*?)"', page_content)
 
-    # extracted_links is a list of tuples, extract only full URLs
-    full_links = [link[0] for link in extracted_links]
+    # Extract only the URLs from the tuples returned by findall
+    extracted_links = [link[0] for link in found_links]
 
-    return full_links, search_url
+    return search_url, extracted_links
 
 with tab2:
-    st.header("Generate TanzLII Search URL")
+    st.header("Generate TanzLII Search URL and Extract Links")
     query = st.text_input("Enter case description (e.g., 'termination of employment')")
 
     if query:
-        with st.spinner("Generating search link and extracting links..."):
-            extracted_links, search_url = generate_search_url(query)
+        with st.spinner("Loading and extracting links..."):
+            search_url, links = generate_search_url_and_extract_links(query)
 
-        st.markdown("### 🔗 TanzLII Search URL:")
+        st.markdown("### 🔗 Search URL")
         st.markdown(f"[{search_url}]({search_url})", unsafe_allow_html=True)
 
-        st.markdown("### 🔍 Extracted Links:")
-        if extracted_links:
-            for idx, link in enumerate(extracted_links, 1):
+        st.markdown("### 🔍 Extracted Links")
+        if links:
+            for idx, link in enumerate(links, 1):
                 st.markdown(f"{idx}. [{link}]({link})")
         else:
-            st.info("No links found with your regex.")
+            st.info("No links found.")
