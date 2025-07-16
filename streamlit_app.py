@@ -80,10 +80,10 @@ def fetch_first_5_download_links(search_query):
     try:
         response = requests.get(search_url, headers=headers)
     except Exception as e:
-        return [{"error": f"❌ Request failed: {e}"}]
+        return [{"error": f"❌ Request failed: {e}"}, {"url": search_url}]
 
     if response.status_code != 200:
-        return [{"error": f"❌ Failed to fetch search results. Status code: {response.status_code}"}]
+        return [{"error": f"❌ Failed to fetch search results. Status code: {response.status_code}"}, {"url": search_url}]
 
     soup = BeautifulSoup(response.text, 'html.parser')
     download_links = []
@@ -98,7 +98,10 @@ def fetch_first_5_download_links(search_query):
                     break
 
     if not download_links:
-        return [{"message": "Bot working"}]
+        return [
+            {"message": "Nada"},
+            {"search_url": search_url}
+        ]
 
     return [{"link": url} for url in download_links]
 
