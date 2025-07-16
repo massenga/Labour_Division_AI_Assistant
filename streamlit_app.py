@@ -74,32 +74,32 @@ def generate_search_url_and_extract_links(search_query):
     encoded_query = quote_plus(search_query)
     search_url = f"{base_url}/search/?suggestion=&q={encoded_query}#gsc.tab=0"
 
-    # Load the search URL page content
     response = requests.get(search_url)
     page_content = response.text
 
-    # Pull all absolute http(s) links from the page content using your regex
-    found_links = re.findall(r'"((http)s?://.*?)"', page_content)
+    # Regex to find href="/akn/tz/judgment...."
+    pattern = r'href="(/akn/tz/judgment[^"]*)"'
+    relative_links = re.findall(pattern, page_content)
 
-    # Extract only the URLs from the tuples returned by findall
-    extracted_links = [link[0] for link in found_links]
+    # Convert relative URLs to full URLs
+    full_links = [urljoin(base_url, link) for link in relative_links]
 
-    return search_url, extracted_links
+    return search_url, full_links
 
 with tab2:
-    st.header("Generate TanzLII Search URL and Extract Links")
+    st.header("Generate TanzLII Search URL and Extract Judgment Links")
     query = st.text_input("Enter case description (e.g., 'termination of employment')")
 
     if query:
-        with st.spinner("Loading and extracting links..."):
+        with st.spinner("Loading and extracting judgment links..."):
             search_url, links = generate_search_url_and_extract_links(query)
 
         st.markdown("### 🔗 Search URL")
         st.markdown(f"[{search_url}]({search_url})", unsafe_allow_html=True)
 
-        st.markdown("### 🔍 Extracted Links")
+        st.markdown("### 🔍 Extracted Judgment Links")
         if links:
             for idx, link in enumerate(links, 1):
                 st.markdown(f"{idx}. [{link}]({link})")
         else:
-            st.info("No links found.")
+            st.info("No judgment links found.")
