@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 import feedparser
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from urllib.parse import urljoin
+from urllib.parse import quote_plus, urljoin
 from io import BytesIO
 from playwright.sync_api import sync_playwright
 
@@ -67,9 +67,9 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+#import requests
+#from bs4 import BeautifulSoup
+#from urllib.parse import urljoin
 
 def fetch_first_5_download_links(search_query):
     base_url = "https://tanzlii.org"
