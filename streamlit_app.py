@@ -69,38 +69,42 @@ with tab1:
 
 # --- Use Case 2: Similar Case Retrieval ---
 
-def generate_search_url_and_extract_links(search_query):
+import re
+import requests
+from requests_html import HTMLSession
+
+def fetch_links_with_js(search_query):
     base_url = "https://tanzlii.org"
     encoded_query = quote_plus(search_query)
     search_url = f"{base_url}/search/?suggestion=&q={encoded_query}#gsc.tab=0"
 
-    response = requests.get(search_url)
-    page_content = response.text
+    session = HTMLSession()
+    r = session.get(search_url)
+    r.html.render(sleep=2)  # render JS, wait 2 seconds
 
-    # Regex to find href="/akn/tz/judgment...."
-    pattern = r'href="(/akn/tz/judgment[^"]*)"'
-    relative_links = re.findall(pattern, page_content)
-    print(page_content[:2000])
+    # Extract links that start with /akn/tz/judgment
+    links = []
+    for a in r.html.find('a'):
+        href = a.attrs.get('href', '')
+        if href.startswith('/akn/tz/judgment'):
+            full_url = urljoin(base_url, href)
+            links.append(full_url)
 
-    # Convert relative URLs to full URLs
-    full_links = [urljoin(base_url, link) for link in relative_links]
+    return search_url, links
 
-    return search_url, full_links
-
-with tab2:
-    st.header("Generate TanzLII Search URL and Extract Judgment Links")
-    query = st.text_input("Enter case description (e.g., 'termination of employment')")
+with st.sidebar:
+    st.header("TanzLII JS Search")
+    query = st.text_input("Enter search query")
 
     if query:
-        with st.spinner("Loading and extracting judgment links..."):
-            search_url, links = generate_search_url_and_extract_links(query)
+        with st.spinner("Rendering JS and fetching links..."):
+            search_url, links = fetch_links_with_js(query)
 
-        st.markdown("### 🔗 Search URL")
-        st.markdown(f"[{search_url}]({search_url})", unsafe_allow_html=True)
+        st.markdown(f"### Search URL\n[{search_url}]({search_url})")
 
-        st.markdown("### 🔍 Extracted Judgment Links")
         if links:
-            for idx, link in enumerate(links, 1):
-                st.markdown(f"{idx}. [{link}]({link})")
+            st.markdown("### Extracted Judgment Links")
+            for i, link in enumerate(links, 1):
+                st.markdown(f"{i}. [{link}]({link})")
         else:
             st.info("No judgment links found.")
