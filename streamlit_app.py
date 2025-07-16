@@ -67,15 +67,14 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-#import requests
-#from bs4 import BeautifulSoup
-#from urllib.parse import urljoin
 
 def generate_search_url(search_query):
     base_url = "https://tanzlii.org"
     encoded_query = quote_plus(search_query)
     search_url = f"{base_url}/search/?suggestion=&q={encoded_query}#gsc.tab=0"
-    return search_url
+    site_url = search_url.read()
+    extracted_links = re.findall('"((http)s?://.*?)"', str(site_url))
+    return extracted_links
 
 with tab2:
     st.header("Generate TanzLII Search URL")
