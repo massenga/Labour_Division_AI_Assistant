@@ -64,107 +64,52 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-def fetch_and_summarize_pdfs_direct(search_query, max_pdfs=6):
-    from urllib.parse import urljoin
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
+def fetch_links(search_query):
     base_url = "https://tanzlii.org"
     search_url = f"{base_url}/search/?q={search_query.replace(' ', '+')}"
     headers = {"User-Agent": "Mozilla/5.0"}
 
-    response = requests.get(search_url, headers=headers)
+    try:
+        response = requests.get(search_url, headers=headers)
+    except Exception as e:
+        return [{"error": f"❌ Request failed: {e}"}]
+
     if response.status_code != 200:
-        return [{"summary": f"❌ Failed to fetch search results. Status code: {response.status_code}"}]
+        return [{"error": f"❌ Failed to fetch search results. Status code: {response.status_code}"}]
 
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    # Step 1: Find 'Download' links (usually PDF sources)
+    soup = BeautifulSoup(response.text, 'html.parser')
     download_links = []
-    for a in soup.find_all("a", href=True):
+
+    for a in soup.find_all('a'):
         if a.text.strip().lower() == "download":
-            href = a["href"]
-            full_url = urljoin(base_url, href)
-            download_links.append(full_url)
-            if len(download_links) >= max_pdfs:
-                break
+            href = a.get('href')
+            if href:
+                full_url = urljoin(base_url, href)
+                download_links.append(full_url)
+                if len(download_links) == 5:
+                    break
 
     if not download_links:
-        return [{"summary": "No PDF download links found. Try a broader keyword."}]
+        return [{"message": "No download links found."}]
 
-    results = []
-
-    # Step 2: Process and summarize each PDF
-    for i, pdf_url in enumerate(download_links, start=1):
-        try:
-            pdf_response = requests.get(pdf_url, headers=headers)
-            pdf_response.raise_for_status()
-            pdf_bytes = pdf_response.content
-
-            reader = PdfReader(BytesIO(pdf_bytes))
-            text = ""
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-
-            if not text.strip():
-                summary = "No extractable text found in PDF."
-            else:
-                prompt = (
-                    "Summarize the following labour court judgment into 5 key points: "
-                    "1) cause of dispute, 2) legal reasoning, 3) final ruling, "
-                    "4) cited laws, and 5) potential impact or precedent.\n\n"
-                    f"{text[:3000]}"
-                )
-
-                response = openai.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a legal assistant."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=500,
-                    temperature=0.4,
-                )
-                summary = response.choices[0].message.content
-
-            results.append({
-                "pdf_url": pdf_url,
-                "summary": summary
-            })
-
-        except Exception as e:
-            results.append({
-                "pdf_url": pdf_url,
-                "summary": f"Error processing PDF: {str(e)}"
-            })
-
-    return results
+    return [{"link": url} for url in download_links]
 
 with tab2:
-    st.header("Search for Similar Cases on TanzLII")
-    query = st.text_input("Enter case description (e.g., 'unfair termination due to pregnancy')")
+    st.header("List 'Download' Links from TanzLII Search Results")
+    query = st.text_input("Enter case description (e.g., 'termination of employment')")
 
     if query:
-        search_url = f"https://tanzlii.org/search/?q={query.replace(' ', '+')}"
-        st.markdown(
-            f"<small>[Click here to search TanzLII for Similar cases to '{query}']({search_url})</small>",
-            unsafe_allow_html=True
-        )
+        with st.spinner("Fetching links..."):
+            links = fetch_links(query)
 
-        with st.spinner("Fetching and summarizing PDF judgments... this may take a while"):
-            cases = fetch_and_summarize_pdfs_direct(query, max_pdfs=6)
-
-        if cases:
-            for idx, case in enumerate(cases, start=1):
-                pdf_url = case.get('pdf_url')
-                if pdf_url:
-                    filename = pdf_url.split('/')[-1]
-                    st.subheader(f"Case {idx}: {filename}")
-                    st.markdown(f"[Download PDF]({pdf_url})", unsafe_allow_html=True)
-                else:
-                    st.subheader(f"Case {idx}: PDF URL not available")
-
-                summary = case.get("summary", "No summary available")
-                st.write(summary)
-        else:
-            st.warning("No PDF judgments found for the given query. Try a broader keyword.")
+        for idx, item in enumerate(links, start=1):
+            if "link" in item:
+                st.markdown(f"**Link {idx}:** [Download]({item['link']})", unsafe_allow_html=True)
+            elif "error" in item:
+                st.error(item["error"])
+            elif "message" in item:
+                st.info(item["message"])
