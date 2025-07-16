@@ -64,11 +64,7 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-
-def fetch_links(search_query):
+def fetch_first_5_download_links(search_query):
     base_url = "https://tanzlii.org"
     search_url = f"{base_url}/search/?q={search_query.replace(' ', '+')}"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -84,14 +80,12 @@ def fetch_links(search_query):
     soup = BeautifulSoup(response.text, 'html.parser')
     download_links = []
 
-    for a in soup.find_all('a'):
-        if a.text.strip().lower() == "download":
-            href = a.get('href')
-            if href:
-                full_url = urljoin(base_url, href)
-                download_links.append(full_url)
-                if len(download_links) == 5:
-                    break
+    for a in soup.find_all('a', href=True):
+        if a.get_text(strip=True).lower() == "download":
+            full_url = urljoin(base_url, a['href'])
+            download_links.append(full_url)
+            if len(download_links) == 5:
+                break
 
     if not download_links:
         return [{"message": "No download links found."}]
@@ -99,16 +93,16 @@ def fetch_links(search_query):
     return [{"link": url} for url in download_links]
 
 with tab2:
-    st.header("List 'Download' Links from TanzLII Search Results")
-    query = st.text_input("Enter case description (e.g., 'termination of employment')")
+    st.header("First 5 TanzLII Download Links")
+    query = st.text_input("Search TanzLII (e.g. 'probation dismissal')")
 
     if query:
-        with st.spinner("Fetching links..."):
-            links = fetch_links(query)
+        with st.spinner("Searching TanzLII..."):
+            links = fetch_first_5_download_links(query)
 
-        for idx, item in enumerate(links, start=1):
+        for i, item in enumerate(links, 1):
             if "link" in item:
-                st.markdown(f"**Link {idx}:** [Download]({item['link']})", unsafe_allow_html=True)
+                st.markdown(f"**Link {i}:** [Download Judgment]({item['link']})", unsafe_allow_html=True)
             elif "error" in item:
                 st.error(item["error"])
             elif "message" in item:
