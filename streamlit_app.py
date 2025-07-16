@@ -5,6 +5,8 @@ import openai
 import requests
 from bs4 import BeautifulSoup
 import feedparser
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from urllib.parse import urljoin
 from io import BytesIO
 
@@ -64,46 +66,46 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-def fetch_first_5_download_links(search_query):
+def fetch_download_links_selenium(query, max_links=5):
     base_url = "https://tanzlii.org"
-    search_url = f"{base_url}/search/?q={search_query.replace(' ', '+')}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    search_url = f"{base_url}/search/?q={query.replace(' ', '+')}"
+    
+    opts = Options()
+    opts.add_argument("--headless")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
 
     try:
-        response = requests.get(search_url, headers=headers)
+        driver = webdriver.Chrome(options=opts)
+        driver.get(search_url)
+        driver.implicitly_wait(5)
+
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        driver.quit()
     except Exception as e:
-        return [{"error": f"❌ Request failed: {e}"}]
+        return [f"❌ Error: {str(e)}"]
 
-    if response.status_code != 200:
-        return [{"error": f"❌ Failed to fetch search results. Status code: {response.status_code}"}]
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-    download_links = []
-
-    for a in soup.find_all('a', href=True):
+    links = []
+    for a in soup.find_all("a", href=True):
         if a.get_text(strip=True).lower() == "download":
-            full_url = urljoin(base_url, a['href'])
-            download_links.append(full_url)
-            if len(download_links) == 5:
+            full = urljoin(base_url, a["href"])
+            links.append(full)
+            if len(links) >= max_links:
                 break
 
-    if not download_links:
-        return [{"message": "No download links found."}]
-
-    return [{"link": url} for url in download_links]
+    return links if links else ["Still not working"]
 
 with tab2:
-    st.header("First 5 TanzLII Download Links")
-    query = st.text_input("Search TanzLII (e.g. 'probation dismissal')")
+    st.header("Search TanzLII Download Links (First 5)")
+
+    query = st.text_input("Enter legal search query (e.g. 'wrongful termination')")
 
     if query:
-        with st.spinner("Searching TanzLII..."):
-            links = fetch_first_5_download_links(query)
+        with st.spinner("Searching and extracting download links..."):
+            links = fetch_download_links_selenium(query)
 
-        for i, item in enumerate(links, 1):
-            if "link" in item:
-                st.markdown(f"**Link {i}:** [Download Judgment]({item['link']})", unsafe_allow_html=True)
-            elif "error" in item:
-                st.error(item["error"])
-            elif "message" in item:
-                st.info(item["message"])
+        if links and isinstance(links[0], str) and links[0].startswith("http"):
+            for i, link in enumerate(links, 1):
+                st.markdown(f"**Link {i}:** [Download Judgment]({link})", unsafe_allow_html=True)
+        else:
+            st.warning(links[0])  # show error or "No download links found"
