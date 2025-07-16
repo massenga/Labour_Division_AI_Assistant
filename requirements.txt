@@ -6,3 +6,4 @@ requests
 feedparser
 selenium>=4.0
 playwright
+requests-html
