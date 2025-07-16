@@ -67,41 +67,55 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-def fetch_download_links_playwright(query, max_links=5):
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+def fetch_first_5_download_links(search_query):
     base_url = "https://tanzlii.org"
-    search_url = f"{base_url}/search/?q={query.replace(' ', '+')}"
+    encoded_query = quote_plus(search_query)
+    search_url = f"{base_url}/search/?suggestion=&q={encoded_query}#gsc.tab=0"
+    headers = {"User-Agent": "Mozilla/5.0"}
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(search_url)
-        page.wait_for_load_state("networkidle")
+    try:
+        response = requests.get(search_url, headers=headers)
+    except Exception as e:
+        return [{"error": f"❌ Request failed: {e}"}]
 
-        html = page.content()
-        browser.close()
+    if response.status_code != 200:
+        return [{"error": f"❌ Failed to fetch search results. Status code: {response.status_code}"}]
 
-    soup = BeautifulSoup(html, "html.parser")
-    links = []
+    soup = BeautifulSoup(response.text, 'html.parser')
+    download_links = []
 
-    for a in soup.find_all("a", href=True):
-        if a.get_text(strip=True).lower() == "download":
-            full_url = urljoin(base_url, a["href"])
-            links.append(full_url)
-            if len(links) >= max_links:
-                break
+    for a in soup.find_all('a'):
+        if a.text.strip().lower() == "download":
+            href = a.get('href')
+            if href:
+                full_url = urljoin(base_url, href)
+                download_links.append(full_url)
+                if len(download_links) == 5:
+                    break
 
-    return links or ["Something is wrong."]
+    if not download_links:
+        return [{"message": "Bot working"}]
+
+    return [{"link": url} for url in download_links]
 
 with tab2:
-    st.header("Search TanzLII Download Links (First 5)")
-    query = st.text_input("Enter legal search query")
+    st.header("List 'Download' Links from TanzLII Search Results")
+    query = st.text_input("Enter case description (e.g., 'termination of employment')")
 
     if query:
-        with st.spinner("Searching..."):
-            links = fetch_download_links_playwright(query)
+        with st.spinner("Fetching links..."):
+            links = fetch_first_5_download_links(query)
 
-        if links and isinstance(links[0], str) and links[0].startswith("http"):
-            for i, link in enumerate(links, 1):
-                st.markdown(f"**Link {i}:** [Download Judgment]({link})", unsafe_allow_html=True)
+        for idx, item in enumerate(links, start=1):
+            if "link" in item:
+                st.markdown(f"**Link {idx}:** [Download]({item['link']})", unsafe_allow_html=True)
+            elif "error" in item:
+                st.error(item["error"])
+            elif "message" in item:
+                st.info(item["message"])
         else:
             st.warning(links[0])
