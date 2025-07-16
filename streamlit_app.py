@@ -71,54 +71,19 @@ with tab1:
 #from bs4 import BeautifulSoup
 #from urllib.parse import urljoin
 
-def fetch_first_5_download_links(search_query):
+def generate_search_url(search_query):
     base_url = "https://tanzlii.org"
     encoded_query = quote_plus(search_query)
     search_url = f"{base_url}/search/?suggestion=&q={encoded_query}#gsc.tab=0"
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    try:
-        response = requests.get(search_url, headers=headers)
-    except Exception as e:
-        return [{"error": f"❌ Request failed: {e}"}, {"url": search_url}]
-
-    if response.status_code != 200:
-        return [{"error": f"❌ Failed to fetch search results. Status code: {response.status_code}"}, {"url": search_url}]
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-    download_links = []
-
-    for a in soup.find_all('a'):
-        if a.text.strip().lower() == "download":
-            href = a.get('href')
-            if href:
-                full_url = urljoin(base_url, href)
-                download_links.append(full_url)
-                if len(download_links) == 5:
-                    break
-
-    if not download_links:
-        return [
-            {"message": "Nada"},
-            {"search_url": search_url}
-        ]
-
-    return [{"link": url} for url in download_links]
+    return search_url
 
 with tab2:
-    st.header("List 'Download' Links from TanzLII Search Results")
+    st.header("Generate TanzLII Search URL")
     query = st.text_input("Enter case description (e.g., 'termination of employment')")
 
     if query:
-        with st.spinner("Fetching links..."):
-            links = fetch_first_5_download_links(query)
+        with st.spinner("Generating search link..."):
+            search_url = generate_search_url(query)
 
-        for idx, item in enumerate(links, start=1):
-            if "link" in item:
-                st.markdown(f"**Link {idx}:** [Download]({item['link']})", unsafe_allow_html=True)
-            elif "error" in item:
-                st.error(item["error"])
-            elif "message" in item:
-                st.info(item["message"])
-        else:
-            st.warning(links[0])
+        st.markdown("### 🔗 TanzLII Search URL:")
+        st.markdown(f"[{search_url}]({search_url})", unsafe_allow_html=True)
