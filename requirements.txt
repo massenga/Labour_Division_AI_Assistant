@@ -5,3 +5,4 @@ beautifulsoup4
 requests
 feedparser
 selenium>=4.0
+playwright
