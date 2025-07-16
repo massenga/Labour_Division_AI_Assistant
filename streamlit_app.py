@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from urllib.parse import urljoin
 from io import BytesIO
+from playwright.sync_api import sync_playwright
 
 # Load OpenAI API key
 openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
@@ -66,46 +67,41 @@ with tab1:
         st.info("Please upload a PDF to summarize.")
 
 # --- Use Case 2: Similar Case Retrieval ---
-def fetch_download_links_selenium(query, max_links=5):
+def fetch_download_links_playwright(query, max_links=5):
     base_url = "https://tanzlii.org"
     search_url = f"{base_url}/search/?q={query.replace(' ', '+')}"
-    
-    opts = Options()
-    opts.add_argument("--headless")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
 
-    try:
-        driver = webdriver.Chrome(options=opts)
-        driver.get(search_url)
-        driver.implicitly_wait(5)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(search_url)
+        page.wait_for_load_state("networkidle")
 
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        driver.quit()
-    except Exception as e:
-        return [f"❌ Error: {str(e)}"]
+        html = page.content()
+        browser.close()
 
+    soup = BeautifulSoup(html, "html.parser")
     links = []
+
     for a in soup.find_all("a", href=True):
         if a.get_text(strip=True).lower() == "download":
-            full = urljoin(base_url, a["href"])
-            links.append(full)
+            full_url = urljoin(base_url, a["href"])
+            links.append(full_url)
             if len(links) >= max_links:
                 break
 
-    return links if links else ["Still not working"]
+    return links or ["Something is wrong."]
 
 with tab2:
     st.header("Search TanzLII Download Links (First 5)")
-
-    query = st.text_input("Enter legal search query (e.g. 'wrongful termination')")
+    query = st.text_input("Enter legal search query")
 
     if query:
-        with st.spinner("Searching and extracting download links..."):
-            links = fetch_download_links_selenium(query)
+        with st.spinner("Searching..."):
+            links = fetch_download_links_playwright(query)
 
         if links and isinstance(links[0], str) and links[0].startswith("http"):
             for i, link in enumerate(links, 1):
                 st.markdown(f"**Link {i}:** [Download Judgment]({link})", unsafe_allow_html=True)
         else:
-            st.warning(links[0])  # show error or "No download links found"
+            st.warning(links[0])
